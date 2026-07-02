@@ -15976,6 +15976,27 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
         window.visualViewport.addEventListener('resize', setAppVH);
     }
 
+    // ========================= iOS 输入框聚焦防页面偏移 =========================
+    (function() {
+        var scrollLockTimer = null;
+        document.addEventListener('focusin', function(e) {
+            var tag = e.target.tagName;
+            if (tag === 'INPUT' || tag === 'TEXTAREA' || e.target.isContentEditable) {
+                if (scrollLockTimer) clearInterval(scrollLockTimer);
+                scrollLockTimer = setInterval(function() {
+                    window.scrollTo(0, 0);
+                }, 50);
+                setTimeout(function() {
+                    if (scrollLockTimer) { clearInterval(scrollLockTimer); scrollLockTimer = null; }
+                }, 600);
+            }
+        });
+        document.addEventListener('focusout', function() {
+            if (scrollLockTimer) { clearInterval(scrollLockTimer); scrollLockTimer = null; }
+            window.scrollTo(0, 0);
+        });
+    })();
+
     // ========================= 核心：无限容量图片引擎 (IndexedDB) =========================
     const DB_NAME = 'QuanQuanJi_ImageDB';
     let imgDB = null;
@@ -32609,9 +32630,18 @@ ${verifyHistory}
         profile.likes = document.getElementById('me-settings-likes').value.trim(); 
         
         const avatarUrl = document.getElementById('me-settings-avatar-url').value.trim();
-        if (avatarUrl !== '（已上传本地图片）') profile.avatar = avatarUrl;
+        if (avatarUrl === '（已上传本地图片）') {
+            profile.avatar = document.getElementById('me-settings-avatar-preview').src;
+        } else if (avatarUrl) {
+            profile.avatar = avatarUrl;
+        }
         
-        profile.cover = document.getElementById('me-settings-cover-url').value.trim(); 
+        const coverUrl = document.getElementById('me-settings-cover-url').value.trim();
+        if (coverUrl === '（已上传本地图片）') {
+            profile.cover = document.getElementById('me-settings-cover-preview').src;
+        } else if (coverUrl) {
+            profile.cover = coverUrl;
+        }
         const pw = document.getElementById('me-settings-payment-password').value.trim();
         if (pw && !/^\d{6}$/.test(pw)) { showToast("支付密码必须是6位数字"); return; }
         profile.paymentPassword = pw;
@@ -32622,9 +32652,17 @@ ${verifyHistory}
         saveUserProfile(profile); 
         
         const mAvatar = document.getElementById('me-settings-moments-avatar-url').value.trim();
+        if (mAvatar === '（已上传本地图片）') {
+            momentsProfile.avatar = document.getElementById('me-settings-moments-avatar-preview').src;
+        } else if (mAvatar) {
+            momentsProfile.avatar = mAvatar;
+        }
         const mCover = document.getElementById('me-settings-moments-cover-url').value.trim();
-        if (mAvatar !== '（已上传本地图片）') momentsProfile.avatar = mAvatar;
-        if (mCover !== '（已上传本地图片）') momentsProfile.cover = mCover;
+        if (mCover === '（已上传本地图片）') {
+            momentsProfile.cover = document.getElementById('me-settings-moments-cover-preview').src;
+        } else if (mCover) {
+            momentsProfile.cover = mCover;
+        }
         saveMomentsProfile(momentsProfile);
 
         loadUserProfile(); 
