@@ -593,20 +593,21 @@
 
 
         #grid-area {
-             flex: 1;
+             margin-top: auto;
              display: grid;
              grid-template-columns: 1fr 1fr;
 
-             grid-template-rows: 1fr 1fr;
+             grid-template-rows: auto auto;
              padding: 0 15px 10px 15px;
              gap: 15px;
              width: 100%;
              max-width: 600px;
-             margin: 0 auto;
+             margin-left: auto;
+             margin-right: auto;
          }
         .grid-quadrant {
              width: 100%;
-             height: 100%;
+             height: auto;
              display: flex;
              justify-content: center;
              align-items: center;
@@ -617,7 +618,6 @@
         /* --- 情侣卡片组件 --- */
         .couple-card {
             width: 100%;
-            height: 100%;
             background: transparent;
             border-radius: 20px;
             padding: 12px 10px;
