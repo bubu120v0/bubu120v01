@@ -455,13 +455,23 @@
              -webkit-tap-highlight-color: transparent;
              font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
          }
+        html {
+             position: fixed;
+             top: 0; left: 0;
+             width: 100%; height: 100%;
+             overflow: hidden;
+             overscroll-behavior: none;
+        }
         body {
-             width: 100vw;
-             height: 100vh;
+             width: 100%;
+             height: 100%;
              height: var(--app-vh, 100vh); /* 【安卓兼容修复】JS动态计算真实视口高度 */
              overflow: hidden;
+             overscroll-behavior: none;
              background: url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?ixlib-rb-1.2.1&auto=format&fit=crop&w=1000&q=80') center/cover no-repeat;
-             position: relative;
+             position: fixed;
+             top: 0; left: 0;
+             -webkit-overflow-scrolling: auto;
              /* 【安卓兼容修复】移除 transition: background-image，安卓不支持对背景图做过渡，
                 强制过渡会导致持续重绘闪烁 */
              /* 【安卓兼容修复】移除 z-index: -2，安卓上导致body内容被推到最底层，
@@ -477,7 +487,7 @@
              height: 100%;
              display: flex;
              flex-direction: column;
-             padding: 0;
+             padding: 0 0 env(safe-area-inset-bottom, 20px) 0;
              /* 【安卓兼容修复】缩短过渡时间并使用 will-change 提示浏览器优化合成层，
                 避免安卓上 opacity+transform 过渡引发大面积重绘闪烁 */
              transition: opacity 0.15s ease, transform 0.15s ease;
@@ -776,7 +786,7 @@
         /* 底栏样式 */
         #dock-area {
              height: 95px; width: 100%; display: flex; justify-content: center; align-items: center;
-             padding: 0 15px 0 15px; flex-shrink: 0;
+             padding: 0 15px 10px 15px; flex-shrink: 0;
          }
         .dock-container {
              width: 100%; max-width: 350px; height: 100%;
@@ -5714,6 +5724,7 @@
           width: 100%;
           height: 100%;
           position: relative;
+          overflow: hidden;
           background-size: cover;
           background-position: center;
           background: linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #FFDDE6 100%);
@@ -15965,6 +15976,21 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
 
 <script>
     'use strict';
+
+    // ========================= 全局阻止页面弹性滚动 =========================
+    // 阻止 body/html 层面的触摸滚动，只保留有 overflow-y:auto/scroll 的容器内部滚动
+    document.addEventListener('touchmove', function(e) {
+        var el = e.target;
+        while (el && el !== document.body && el !== document.documentElement) {
+            var style = window.getComputedStyle(el);
+            var oy = style.overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) {
+                return; // 容器可滚动，放行
+            }
+            el = el.parentElement;
+        }
+        e.preventDefault();
+    }, { passive: false });
 
     // ========================= 【安卓兼容修复】视口高度动态计算 =========================
     // 安卓浏览器地址栏收缩/展开会导致 100vh 不等于实际可视高度，
