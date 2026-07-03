@@ -478,6 +478,7 @@
              display: flex;
              flex-direction: column;
              overflow: hidden;
+             background: linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #FFDDE6 100%);
              padding: 0 0 env(safe-area-inset-bottom, 20px) 0;
              /* 【安卓兼容修复】缩短过渡时间并使用 will-change 提示浏览器优化合成层，
                 避免安卓上 opacity+transform 过渡引发大面积重绘闪烁 */
@@ -5735,7 +5736,7 @@
           overflow: hidden;
           background-size: cover;
           background-position: center;
-          background: linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #FFDDE6 100%);
+          background: #FFF8FA;
           transform: scale(1.17647); /* 1/0.85，放大填补子元素缩小产生的空白边缘 */
           transform-origin: center center;
         }
@@ -33006,6 +33007,7 @@ document.getElementById('phone-frame-switch').checked = localStorage.getItem(PHO
         const settings = JSON.parse(localStorage.getItem(ALL_SETTINGS_KEY) || '{}');
         const phoneScreen = document.getElementById('phone-screen-content');
         const appWrapper = document.getElementById('app-wrapper');
+        const homeScreen = document.getElementById('home-screen');
         const wp = settings.visual?.wallpaper || '';
 
         // 手机框模式开启时，壁纸贴在屏幕内
@@ -33013,18 +33015,22 @@ document.getElementById('phone-frame-switch').checked = localStorage.getItem(PHO
             if (wp) {
                 phoneScreen.style.background = `url(${wp}) center/cover no-repeat`;
                 appWrapper.style.background = 'transparent';
+                homeScreen.style.background = 'transparent';
             } else {
                 phoneScreen.style.background = 'linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #FFDDE6 100%)';
                 appWrapper.style.background = 'transparent';
+                homeScreen.style.background = 'linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #FFDDE6 100%)';
             }
             document.body.style.background = 'none';
         } else {
             if (wp) {
                 document.body.style.background = `url(${wp}) center/cover no-repeat`;
-                appWrapper.style.background = 'transparent';
+                appWrapper.style.background = '#FFF8FA';
+                homeScreen.style.background = 'transparent';
             } else {
                 document.body.style.background = 'linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #FFDDE6 100%)';
-                appWrapper.style.background = 'linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #FFDDE6 100%)';
+                appWrapper.style.background = '#FFF8FA';
+                homeScreen.style.background = 'linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #FFDDE6 100%)';
             }
             phoneScreen.style.background = 'none';
         }
