@@ -455,19 +455,13 @@
              -webkit-tap-highlight-color: transparent;
              font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Arial, sans-serif;
          }
-        html {
-             position: fixed;
-             top: 0; left: 0; right: 0; bottom: 0;
-             overflow: hidden;
-             overscroll-behavior: none;
-        }
         body {
-             position: fixed;
-             top: 0; left: 0; right: 0; bottom: 0;
+             width: 100vw;
+             height: 100vh;
+             height: var(--app-vh, 100vh); /* 【安卓兼容修复】JS动态计算真实视口高度 */
              overflow: hidden;
-             overscroll-behavior: none;
              background: url('https://images.unsplash.com/photo-1579546929518-9e396f3cc809?ixlib-rb-1.2.1&auto=format&fit=crop&w=1000&q=80') center/cover no-repeat;
-             -webkit-overflow-scrolling: auto;
+             position: relative;
              /* 【安卓兼容修复】移除 transition: background-image，安卓不支持对背景图做过渡，
                 强制过渡会导致持续重绘闪烁 */
              /* 【安卓兼容修复】移除 z-index: -2，安卓上导致body内容被推到最底层，
@@ -475,7 +469,7 @@
              /* 页面缩放居中布局 - 不再在body上做scale，避免溢出裁剪导致布局偏移 */
              display: flex;
              justify-content: center;
-             align-items: stretch;
+             align-items: center;
         }
         body.chat-keyboard-open { background: #F8F8F8 !important; }
         #home-screen {
@@ -483,6 +477,7 @@
              height: 100%;
              display: flex;
              flex-direction: column;
+             overflow: hidden;
              padding: 0 0 env(safe-area-inset-bottom, 20px) 0;
              /* 【安卓兼容修复】缩短过渡时间并使用 will-change 提示浏览器优化合成层，
                 避免安卓上 opacity+transform 过渡引发大面积重绘闪烁 */
@@ -507,6 +502,23 @@
         #forum-all-liked-posts-page, #forum-following-page, #edit-forum-page,
         #recollection-color-page, #worldbook-entry-fullscreen-page {
             transform-origin: center center;
+        }
+        /* 所有全屏App页面禁止溢出滚动，防止拖出底部粉色区块 */
+        #chat-app-page, #chat-conversation-view, #wallet-app-page, #wallet-details-page, #settings-page,
+        #worldbook-app-page, #worldbook-color-page, #forum-app-page,
+        #recollection-app-page, #recollection-detail-page, #mall-app-page,
+        #takeout-app-page, #gallery-app-page, #hushh-app-page, #hushh-phone-page,
+        #role-settings-page, #transfer-page, #mall-detail-page, #mall-home-page,
+        #mall-cart-page, #mall-favorite-page, #mall-sent-gifts-page, #mall-purchased-page, #mall-received-gifts-page,
+        #takeout-profile-page, #takeout-favorite-page, #takeout-all-orders-page,
+        #takeout-shop-detail-page, #forum-post-detail-page, #forum-user-profile-page,
+        #forum-my-posts-page, #forum-all-forums-page, #forum-favorite-posts-page,
+        #forum-all-liked-posts-page, #forum-following-page, #edit-forum-page,
+        #recollection-color-page, #worldbook-entry-fullscreen-page,
+        #fav-detail-page, #fav-memo-page, #fav-memo-detail-page, #fav-chat-detail-page,
+        #fav-voice-page, #fav-voice-detail-page, #fav-chat-page, #fav-role-chat-page, #fav-role-chat-detail-page,
+        #tarot-app-page, #voice-call-page, #hushh-phone-page, #favorites-app-page {
+            overflow: hidden;
         }
                 body.settings-active #home-screen,
         body.chat-active #home-screen,
@@ -13262,12 +13274,12 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
     </nav>
 
     <!-- 投喂订单页面 -->
-    <div id="feed-orders-page" class="app-page" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f5f5f5; z-index:9999; overflow-y:auto;">
+    <div id="feed-orders-page" class="app-page" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f5f5f5; z-index:9999; overflow:hidden;">
         <div class="feed-orders-header" style="position:sticky; top:0; background:#fff; padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #eee; z-index:10;">
             <span onclick="closeFeedOrdersPage()" style="font-size:20px; cursor:pointer; color:#e58aab;">←</span>
             <span style="font-size:16px; font-weight:600;">投喂记录</span>
         </div>
-        <div id="feed-orders-list" style="padding:12px;"></div>
+        <div id="feed-orders-list" style="padding:12px; overflow-y:auto; flex:1;"></div>
     </div>
 
     <!-- 请他代付 - 好友选择页面 -->
@@ -13283,12 +13295,12 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
     </div>
 
     <!-- 我的代付记录页面 -->
-    <div id="my-pay-requests-page" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f5f5f5; z-index:9999; overflow-y:auto;">
+    <div id="my-pay-requests-page" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f5f5f5; z-index:9999; overflow:hidden;">
         <div class="my-pay-requests-header" style="position:sticky; top:0; background:#fff; padding:12px 16px; display:flex; align-items:center; gap:12px; border-bottom:1px solid #eee; z-index:10;">
             <span onclick="closeMyPayRequestsPage()" style="font-size:20px; cursor:pointer; color:#ff9800;">←</span>
             <span style="font-size:16px; font-weight:600;">我的代付</span>
         </div>
-        <div id="my-pay-requests-list" style="padding:12px;"></div>
+        <div id="my-pay-requests-list" style="padding:12px; overflow-y:auto; flex:1;"></div>
     </div>
 
     <div id="takeout-dish-detail-modal" class="modal"><div class="modal-content"><button class="close-modal-btn">&times;</button><img id="takeout-dish-detail-image" src=""><h3 id="takeout-dish-detail-name"></h3><h4>制作步骤</h4><div id="takeout-dish-detail-steps" class="steps-content"></div></div></div>
@@ -15972,21 +15984,6 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
 
 <script>
     'use strict';
-
-    // ========================= 全局阻止页面弹性滚动 =========================
-    // 阻止 body/html 层面的触摸滚动，只保留有 overflow-y:auto/scroll 的容器内部滚动
-    document.addEventListener('touchmove', function(e) {
-        var el = e.target;
-        while (el && el !== document.body && el !== document.documentElement) {
-            var style = window.getComputedStyle(el);
-            var oy = style.overflowY;
-            if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight) {
-                return; // 容器可滚动，放行
-            }
-            el = el.parentElement;
-        }
-        e.preventDefault();
-    }, { passive: false });
 
     // ========================= 【安卓兼容修复】视口高度动态计算 =========================
     // 安卓浏览器地址栏收缩/展开会导致 100vh 不等于实际可视高度，
