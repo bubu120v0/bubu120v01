@@ -507,7 +507,6 @@
         #forum-all-liked-posts-page, #forum-following-page, #edit-forum-page,
         #recollection-color-page, #worldbook-entry-fullscreen-page, #pet-app-page {
             transform-origin: center center;
-            overflow: hidden;
         }
                 body.settings-active #home-screen,
         body.chat-active #home-screen,
@@ -5722,7 +5721,6 @@
           width: 100%;
           height: 100%;
           position: relative;
-          overflow: hidden;
           background-size: cover;
           background-position: center;
           background: linear-gradient(135deg, #FFF0F5 0%, #FFE4EC 50%, #FFDDE6 100%);
@@ -15980,11 +15978,17 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
     // 安卓浏览器地址栏收缩/展开会导致 100vh 不等于实际可视高度，
     // 使用 JS 动态计算并设置 CSS 变量 --app-vh，确保页面高度始终正确
     const setAppVH = () => {
-        const vh = window.innerHeight * 0.01;
-        document.documentElement.style.setProperty('--app-vh', `${vh * 100}px`);
+        const h = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+        document.documentElement.style.setProperty('--app-vh', `${h}px`);
     };
     setAppVH();
+    // 刷新后浏览器视口可能未立即稳定，延迟重新计算
+    requestAnimationFrame(() => setAppVH());
+    setTimeout(() => setAppVH(), 100);
+    setTimeout(() => setAppVH(), 300);
     window.addEventListener('resize', setAppVH);
+    window.addEventListener('load', setAppVH);
+    window.addEventListener('pageshow', setAppVH);
     // 安卓地址栏收缩时也触发（visualViewport 比 resize 更精准）
     if (window.visualViewport) {
         window.visualViewport.addEventListener('resize', setAppVH);
