@@ -27950,22 +27950,29 @@ ${msgContext ? msgContext : '无'}
             return window.visualViewport ? window.visualViewport.height : window.innerHeight;
         }
 
+        function scrollToBottom() {
+            if (msgs) {
+                requestAnimationFrame(function() {
+                    msgs.scrollTop = msgs.scrollHeight;
+                });
+            }
+        }
+
         function applyFix() {
             if (!chatView.classList.contains('active')) return;
             var h = getViewH();
-            // 输入框只上移 1/4 距离，留更多空间在下方
-            chatView.style.height = ((heightBefore * 3 + h) / 4) + 'px';
+            // 聊天视图高度设为键盘弹出后的可视高度，确保输入框完全在键盘上方
+            chatView.style.height = h + 'px';
             document.body.classList.add('chat-keyboard-open');
             isKeyboardOpen = true;
-            if (msgs) {
-                requestAnimationFrame(function() { msgs.scrollTop = msgs.scrollHeight; });
-            }
+            scrollToBottom();
         }
 
         function resetFix() {
             chatView.style.height = '';
             document.body.classList.remove('chat-keyboard-open');
             isKeyboardOpen = false;
+            scrollToBottom();
         }
 
         function checkKeyboard() {
@@ -28002,7 +28009,15 @@ ${msgContext ? msgContext : '无'}
 
         // visualViewport 事件监听
         if (window.visualViewport) {
-            window.visualViewport.addEventListener('resize', checkKeyboard);
+            window.visualViewport.addEventListener('resize', function() {
+                if (isKeyboardOpen && chatView.classList.contains('active')) {
+                    // 键盘高度变化时实时更新视图高度
+                    var h = getViewH();
+                    chatView.style.height = h + 'px';
+                    scrollToBottom();
+                }
+                checkKeyboard();
+            });
             window.visualViewport.addEventListener('scroll', checkKeyboard);
         }
 
