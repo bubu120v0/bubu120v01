@@ -30545,6 +30545,7 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
         const callPage = document.getElementById('voice-call-page');
         const callInput = document.getElementById('voice-call-input');
         const callConv = document.getElementById('voice-call-conversation');
+        const callActions = document.querySelector('.voice-call-actions');
         if (!callPage || !callInput) return;
 
         var vcKeyboardOpen = false;
@@ -30562,14 +30563,24 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
         }
 
         function vcApplyFix() {
+            // 不缩小页面高度，保持 100vh 黑色背景覆盖全屏
+            // 给底部操作区加 padding，把输入框推到键盘上方
             var h = getVH();
-            callPage.style.height = h + 'px';
+            var fullH = window.innerHeight || window.screen.height;
+            var keyboardH = fullH - h;
+            if (keyboardH < 0) keyboardH = 0;
+            if (callActions) {
+                callActions.style.paddingBottom = (keyboardH + 20) + 'px';
+            }
             vcKeyboardOpen = true;
             scrollConvToBottom();
         }
 
         function vcResetFix() {
-            callPage.style.height = '100vh';
+            // 恢复原始 padding
+            if (callActions) {
+                callActions.style.paddingBottom = '40px';
+            }
             vcKeyboardOpen = false;
             scrollConvToBottom();
         }
@@ -30579,7 +30590,7 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
             window.visualViewport.addEventListener('resize', function() {
                 if (!callPage.classList.contains('active')) return;
                 var h = getVH();
-                var fullH = window.screen.height;
+                var fullH = window.innerHeight || window.screen.height;
                 var diff = fullH - h;
                 if (diff > 80) {
                     vcApplyFix();
@@ -30594,7 +30605,7 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
             setTimeout(function() {
                 if (!callPage.classList.contains('active')) return;
                 var h = getVH();
-                var fullH = window.screen.height;
+                var fullH = window.innerHeight || window.screen.height;
                 if (fullH - h > 80) {
                     vcApplyFix();
                 }
