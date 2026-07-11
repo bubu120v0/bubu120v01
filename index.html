@@ -3616,6 +3616,7 @@
             outline: none; transition: border-color 0.2s, background-color 0.2s;
         }
         .wb-entry-input.val { min-height: 120px; resize: vertical; line-height: 1.5; }
+        .wb-entry-input.keywords { font-size: 13px; padding: 8px 10px; }
         .wb-entry-input:focus { background: white; border-color: var(--theme-pink-btn); box-shadow: 0 0 0 2px rgba(245, 179, 201, 0.3); }
         
         .wb-plus-row-btn {
@@ -13248,7 +13249,15 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
 <!-- World Book Add Modal -->
 <div id="worldbook-add-modal">
     <div class="wb-modal-card">
-        <div class="wb-modal-header">添加世界书</div>
+        <div class="wb-modal-header">
+            添加世界书
+            <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 400; color: #999; margin-left: auto;">
+                <span>全局</span>
+                <div id="wb-add-global-toggle" class="wb-global-toggle" onclick="toggleWbAddGlobal()" style="width: 36px; height: 20px; border-radius: 10px; background: #ddd; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0;">
+                    <div id="wb-add-global-knob" style="width: 16px; height: 16px; border-radius: 50%; background: white; position: absolute; top: 2px; left: 2px; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"></div>
+                </div>
+            </div>
+        </div>
         <div class="wb-modal-scroll-area">
             <div class="wb-input-label">世界书名</div>
             <input type="text" id="wb-title-input" class="wb-main-input" placeholder="输入世界书名称...">
@@ -13288,10 +13297,16 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
         <div id="wb-detail-normal-actions">
             <button class="wb-delete-book-btn" onclick="toggleWbDetailEdit()">编辑</button>
         </div>
-        <!-- 编辑状态下显示的 删除、添加、完成 按钮 -->
-        <div id="wb-detail-edit-actions" style="display: none; align-items: center; gap: 15px;">
+        <!-- 编辑状态下显示的 删除、添加、全局、完成 按钮 -->
+        <div id="wb-detail-edit-actions" style="display: none; align-items: center; gap: 12px;">
             <img src="https://img.heliar.top/file/1770357709135_删除_delete.png" style="width: 22px; height: 22px; cursor: pointer; opacity: 0.8;" onclick="deleteCurrentWorldBook()">
             <div style="font-size: 28px; font-weight: 300; color: var(--theme-pink-btn); cursor: pointer; line-height: 1; padding-bottom: 2px;" onclick="openAddWbEntryModal()">+</div>
+            <div style="display: flex; align-items: center; gap: 4px; font-size: 11px; color: #999;">
+                <span>全局</span>
+                <div id="wb-detail-global-toggle" class="wb-global-toggle" onclick="toggleWbDetailGlobal()" style="width: 32px; height: 18px; border-radius: 9px; background: #ddd; cursor: pointer; position: relative; transition: background 0.2s; flex-shrink: 0;">
+                    <div id="wb-detail-global-knob" style="width: 14px; height: 14px; border-radius: 50%; background: white; position: absolute; top: 2px; left: 2px; transition: left 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.2);"></div>
+                </div>
+            </div>
             <button class="wb-delete-book-btn" style="background: transparent; color: var(--theme-pink-text); border: 1px solid var(--theme-pink-btn);" onclick="toggleWbDetailEdit()">完成</button>
         </div>
     </div>
@@ -13304,6 +13319,7 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
         <div class="wb-modal-header">新增条目</div>
         <div class="wb-modal-scroll-area">
             <input type="text" id="wb-single-entry-key" class="wb-entry-input key" placeholder="名称（可选）" style="margin-bottom: 10px; border: 1px solid #FADBE6; background: #fff;">
+            <input type="text" id="wb-single-entry-keywords" class="wb-entry-input keywords" placeholder="关键词（逗号分隔，可选）" style="margin-bottom: 10px; border: 1px solid #FADBE6; background: #fff;">
             <textarea id="wb-single-entry-val" class="wb-entry-input val" placeholder="世界书内容" style="min-height: 120px; border: 1px solid #FADBE6; background: #fff;"></textarea>
         </div>
         <div class="wb-modal-actions" style="margin-top: 15px;">
@@ -20315,11 +20331,7 @@ function renderCategories() {
                 
                 let wbText = "";
                 if (contact.worldbookIds && contact.worldbookIds.length > 0) {
-                    const activeWbs = allWorldBooks.filter(b => contact.worldbookIds.includes(b.id));
-                    activeWbs.forEach(wb => {
-                        wbText += `[世界书:${wb.title}] `;
-                        wb.entries.forEach(e => { wbText += `${e.key ? e.key+':' : ''}${e.content} `; });
-                    });
+                    wbText = buildWorldbookContext(allWorldBooks, contact.worldbookIds, '');
                 }
                 return `【外卖顾客身份】昵称: ${contact.alias || contact.name}\n- 顾客人设/性格: ${contact.persona || '无'}\n- 顾客背景: ${wbText || '无'}`;
             }).filter(Boolean).join('\n\n');
@@ -24100,11 +24112,7 @@ window.toggleMallProductFavorite = (productId) => {
         let worldbookContext = "";
         if (forum.worldbookIds && forum.worldbookIds.length > 0) {
             const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-            const activeWbs = allWb.filter(b => forum.worldbookIds.includes(b.id));
-            activeWbs.forEach(wb => {
-                worldbookContext += `\n[世界书: ${wb.title}]\n`;
-                wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-            });
+            worldbookContext = buildWorldbookContext(allWb, forum.worldbookIds, '');
         }
         
               let rolesContext = "";
@@ -25835,11 +25843,7 @@ ${rolesContext ? rolesContext : '无常驻角色。'}
                     let worldbookContext = "";
                     if (contact.worldbookIds && contact.worldbookIds.length > 0) {
                         const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-                        const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-                        activeWbs.forEach(wb => {
-                            worldbookContext += `\n[世界书: ${wb.title}]\n`;
-                            wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-                        });
+                        worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
                     }
 
                     const recollectionData = getRecollections(contact.id);
@@ -26189,10 +26193,31 @@ ${actionInstruction}
     // --- World Book App Logic ---
     window.openWorldBookApp = () => { body.classList.add('worldbook-active'); renderWorldBooks(); };
     window.closeWorldBookApp = () => { body.classList.remove('worldbook-active'); closeWorldBookDetail(); closeWorldBookColorSettings(); };
-    window.openWorldBookAddModal = () => { document.getElementById('wb-title-input').value = ""; document.getElementById('wb-dynamic-entries').innerHTML = ''; addWorldBookEntryRow(); document.getElementById('worldbook-add-modal').classList.add('active'); };
+    window.openWorldBookAddModal = () => { document.getElementById('wb-title-input').value = ""; document.getElementById('wb-dynamic-entries').innerHTML = ''; addWorldBookEntryRow(); document.getElementById('worldbook-add-modal').classList.add('active'); resetWbAddGlobalToggle(); };
     window.closeWorldBookAddModal = () => { document.getElementById('worldbook-add-modal').classList.remove('active'); };
-    window.addWorldBookEntryRow = () => { const container = document.getElementById('wb-dynamic-entries'); const row = document.createElement('div'); row.className = 'wb-entry-row wb-dynamic-row'; row.innerHTML = `<input type="text" class="wb-entry-input key" placeholder="名称（可选）"><textarea class="wb-entry-input val" placeholder="世界书内容"></textarea>`; container.appendChild(row); };
-    window.saveWorldBook = () => { const title = document.getElementById('wb-title-input').value.trim(); if(!title) { showToast("请输入世界书名"); return; } const rows = document.querySelectorAll('.wb-dynamic-row'); const entries = []; let hasContent = false; rows.forEach(row => { const key = row.querySelector('.key').value.trim(); const val = row.querySelector('.val').value.trim(); if(val) { entries.push({ key: key, content: val }); hasContent = true; } }); if (!hasContent) { showToast("请至少输入一条世界书内容"); return; } const newBook = { id: Date.now(), title: title, entries: entries, coverColor: '#EAEAEA', coverImage: '' }; let books = []; try { books = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]'); } catch(e) {} books.push(newBook); localStorage.setItem(WORLDBOOK_DATA_KEY, JSON.stringify(books)); showToast("世界书已保存"); closeWorldBookAddModal(); renderWorldBooks(); };
+
+    let wbAddGlobalEnabled = false;
+    window.toggleWbAddGlobal = () => {
+        wbAddGlobalEnabled = !wbAddGlobalEnabled;
+        const toggle = document.getElementById('wb-add-global-toggle');
+        const knob = document.getElementById('wb-add-global-knob');
+        if (wbAddGlobalEnabled) {
+            toggle.style.background = 'var(--theme-pink-btn)';
+            knob.style.left = '18px';
+        } else {
+            toggle.style.background = '#ddd';
+            knob.style.left = '2px';
+        }
+    };
+    window.resetWbAddGlobalToggle = () => {
+        wbAddGlobalEnabled = false;
+        const toggle = document.getElementById('wb-add-global-toggle');
+        const knob = document.getElementById('wb-add-global-knob');
+        toggle.style.background = '#ddd';
+        knob.style.left = '2px';
+    };
+    window.addWorldBookEntryRow = () => { const container = document.getElementById('wb-dynamic-entries'); const row = document.createElement('div'); row.className = 'wb-entry-row wb-dynamic-row'; row.innerHTML = `<input type="text" class="wb-entry-input key" placeholder="名称（可选）"><input type="text" class="wb-entry-input keywords" placeholder="关键词（逗号分隔，可选）"><textarea class="wb-entry-input val" placeholder="世界书内容"></textarea>`; container.appendChild(row); };
+    window.saveWorldBook = () => { const title = document.getElementById('wb-title-input').value.trim(); if(!title) { showToast("请输入世界书名"); return; } const rows = document.querySelectorAll('.wb-dynamic-row'); const entries = []; let hasContent = false; rows.forEach(row => { const key = row.querySelector('.key').value.trim(); const val = row.querySelector('.val').value.trim(); const keywords = row.querySelector('.keywords').value.trim(); if(val) { entries.push({ key: key, content: val, keywords: keywords }); hasContent = true; } }); if (!hasContent) { showToast("请至少输入一条世界书内容"); return; } const newBook = { id: Date.now(), title: title, entries: entries, coverColor: '#EAEAEA', coverImage: '', isGlobal: wbAddGlobalEnabled }; let books = []; try { books = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]'); } catch(e) {} books.push(newBook); localStorage.setItem(WORLDBOOK_DATA_KEY, JSON.stringify(books)); if (wbAddGlobalEnabled) { autoBindGlobalWorldbook(newBook.id); } showToast("世界书已保存"); closeWorldBookAddModal(); renderWorldBooks(); };
        window.renderWorldBooks = () => { 
         const container = document.getElementById('worldbook-list'); 
         container.innerHTML = ''; 
@@ -26255,6 +26280,7 @@ ${actionInstruction}
 
     window.openAddWbEntryModal = () => {
         document.getElementById('wb-single-entry-key').value = '';
+        document.getElementById('wb-single-entry-keywords').value = '';
         document.getElementById('wb-single-entry-val').value = '';
         document.getElementById('worldbook-add-entry-modal').classList.add('active');
     };
@@ -26266,6 +26292,7 @@ ${actionInstruction}
     window.saveNewWbEntry = () => {
         const key = document.getElementById('wb-single-entry-key').value.trim();
         const val = document.getElementById('wb-single-entry-val').value.trim();
+        const keywords = document.getElementById('wb-single-entry-keywords').value.trim();
         if (!val) {
             showToast("内容不能为空");
             return;
@@ -26275,7 +26302,7 @@ ${actionInstruction}
         const bookIndex = books.findIndex(b => b.id === currentWorldBookId); 
         if (bookIndex !== -1) {
             if (!books[bookIndex].entries) books[bookIndex].entries = [];
-            books[bookIndex].entries.push({ key: key, content: val });
+            books[bookIndex].entries.push({ key: key, content: val, keywords: keywords });
             localStorage.setItem(WORLDBOOK_DATA_KEY, JSON.stringify(books));
             showToast("条目已添加");
             closeAddWbEntryModal();
@@ -26289,7 +26316,10 @@ ${actionInstruction}
         document.getElementById('wb-detail-normal-actions').style.display = 'block';
         document.getElementById('wb-detail-edit-actions').style.display = 'none';
         renderWorldBookDetailView(); 
-        document.getElementById('worldbook-detail-modal').classList.add('active'); 
+        document.getElementById('worldbook-detail-modal').classList.add('active');
+        let books = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
+        const book = books.find(b => b.id === id);
+        if (book) updateWbDetailGlobalToggle(!!book.isGlobal);
     };
     
     function renderWorldBookDetailView() { 
@@ -26331,8 +26361,58 @@ ${actionInstruction}
         page.style.transform = 'translateX(100%)';
         setTimeout(() => page.style.display = 'none', 300);
     };
-    window.editWorldBookEntry = (index) => { const itemEl = document.getElementById(`wb-entry-item-${index}`); if (!itemEl) return; const books = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]'); const book = books.find(b => b.id === currentWorldBookId); if (!book || !book.entries[index]) return; const entry = book.entries[index]; itemEl.innerHTML = `<div class="edit-form"><input type="text" class="wb-entry-input key" placeholder="名称（可选）" value="${escapeHtml(entry.key)}"><textarea class="wb-entry-input val" placeholder="世界书内容">${escapeHtml(entry.content)}</textarea></div><div class="wb-detail-item-actions"><button class="save" onclick="saveWorldBookEntry(${index})">保存</button><button onclick="renderWorldBookDetailView()">取消</button></div>`; };
-    window.saveWorldBookEntry = (index) => { const itemEl = document.getElementById(`wb-entry-item-${index}`); const newKey = itemEl.querySelector('.key').value.trim(); const newVal = itemEl.querySelector('.val').value.trim(); if (!newVal) { showToast("内容不能为空"); return; } let books = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]'); const bookIndex = books.findIndex(b => b.id === currentWorldBookId); if (bookIndex !== -1 && books[bookIndex].entries[index]) { books[bookIndex].entries[index] = { key: newKey, content: newVal }; localStorage.setItem(WORLDBOOK_DATA_KEY, JSON.stringify(books)); showToast("已保存"); renderWorldBookDetailView(); } };
+    window.editWorldBookEntry = (index) => { const itemEl = document.getElementById(`wb-entry-item-${index}`); if (!itemEl) return; const books = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]'); const book = books.find(b => b.id === currentWorldBookId); if (!book || !book.entries[index]) return; const entry = book.entries[index]; itemEl.innerHTML = `<div class="edit-form"><input type="text" class="wb-entry-input key" placeholder="名称（可选）" value="${escapeHtml(entry.key)}"><input type="text" class="wb-entry-input keywords" placeholder="关键词（逗号分隔，可选）" value="${escapeHtml(entry.keywords || '')}"><textarea class="wb-entry-input val" placeholder="世界书内容">${escapeHtml(entry.content)}</textarea></div><div class="wb-detail-item-actions"><button class="save" onclick="saveWorldBookEntry(${index})">保存</button><button onclick="renderWorldBookDetailView()">取消</button></div>`; };
+    window.saveWorldBookEntry = (index) => { const itemEl = document.getElementById(`wb-entry-item-${index}`); const newKey = itemEl.querySelector('.key').value.trim(); const newVal = itemEl.querySelector('.val').value.trim(); const newKeywords = itemEl.querySelector('.keywords').value.trim(); if (!newVal) { showToast("内容不能为空"); return; } let books = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]'); const bookIndex = books.findIndex(b => b.id === currentWorldBookId); if (bookIndex !== -1 && books[bookIndex].entries[index]) { books[bookIndex].entries[index] = { key: newKey, content: newVal, keywords: newKeywords }; localStorage.setItem(WORLDBOOK_DATA_KEY, JSON.stringify(books)); showToast("已保存"); renderWorldBookDetailView(); } };
+        function buildWorldbookContext(allWb, activeWbIds, userMessage) { let context = ""; const activeWbs = allWb.filter(b => activeWbIds.includes(b.id)); activeWbs.forEach(wb => { context += `\n[世界书: ${wb.title}]\n`; const matched = []; const unmatched = []; wb.entries.forEach(e => { if (userMessage && e.keywords) { const keywords = e.keywords.split(',').map(k => k.trim()).filter(Boolean); if (keywords.some(kw => userMessage.includes(kw))) { matched.push(e); return; } } unmatched.push(e); }); matched.forEach(e => { context += `${e.key ? e.key+': ' : ''}${e.content}\n`; }); unmatched.forEach(e => { context += `${e.key ? e.key+': ' : ''}${e.content}\n`; }); }); return context; }
+        function autoBindGlobalWorldbook(wbId) {
+            let contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]');
+            let changed = false;
+            contacts.forEach(c => {
+                if (!c.worldbookIds) c.worldbookIds = [];
+                if (!c.worldbookIds.includes(wbId)) {
+                    c.worldbookIds.push(wbId);
+                    changed = true;
+                }
+            });
+            if (changed) localStorage.setItem(CHAT_DATA_KEY, JSON.stringify(contacts));
+        }
+        function unbindGlobalWorldbook(wbId) {
+            let contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]');
+            let changed = false;
+            contacts.forEach(c => {
+                if (c.worldbookIds && c.worldbookIds.includes(wbId)) {
+                    c.worldbookIds = c.worldbookIds.filter(id => id !== wbId);
+                    changed = true;
+                }
+            });
+            if (changed) localStorage.setItem(CHAT_DATA_KEY, JSON.stringify(contacts));
+        }
+        window.toggleWbDetailGlobal = () => {
+            let books = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
+            const idx = books.findIndex(b => b.id === currentWorldBookId);
+            if (idx === -1) return;
+            books[idx].isGlobal = !books[idx].isGlobal;
+            localStorage.setItem(WORLDBOOK_DATA_KEY, JSON.stringify(books));
+            if (books[idx].isGlobal) {
+                autoBindGlobalWorldbook(currentWorldBookId);
+            } else {
+                unbindGlobalWorldbook(currentWorldBookId);
+            }
+            updateWbDetailGlobalToggle(books[idx].isGlobal);
+            showToast(books[idx].isGlobal ? '已设为全局世界书' : '已取消全局世界书');
+        };
+        function updateWbDetailGlobalToggle(isGlobal) {
+            const toggle = document.getElementById('wb-detail-global-toggle');
+            const knob = document.getElementById('wb-detail-global-knob');
+            if (!toggle || !knob) return;
+            if (isGlobal) {
+                toggle.style.background = 'var(--theme-pink-btn)';
+                knob.style.left = '16px';
+            } else {
+                toggle.style.background = '#ddd';
+                knob.style.left = '2px';
+            }
+        }
         let pendingWbDeleteCallback = null;
 
     // 新增：执行自定义弹窗确认后的删除动作
@@ -26683,7 +26763,7 @@ ${actionInstruction}
     window.triggerAvatarUpload = () => { document.getElementById('input-friend-avatar').click(); };
     window.handleAvatarUrlInput = (input) => { const url = input.value.trim(); const imgEl = document.getElementById('new-friend-avatar-preview'); if (url) { tempAvatarUrl = url; imgEl.src = url; imgEl.style.display = 'block'; document.getElementById('avatar-placeholder-icon').style.display = 'none'; } else { tempAvatarUrl = ""; imgEl.style.display = 'none'; document.getElementById('avatar-placeholder-icon').style.display = 'block'; } };
     window.handleFriendAvatarUpload = (event) => { compressImage(event.target.files[0], 200, (base64) => { tempAvatarUrl = base64; document.getElementById('new-friend-avatar-url').value = ""; const imgEl = document.getElementById('new-friend-avatar-preview'); imgEl.src = tempAvatarUrl; imgEl.style.display = 'block'; document.getElementById('avatar-placeholder-icon').style.display = 'none'; }); };
-    window.saveNewFriend = () => { const name = document.getElementById('new-friend-name').value.trim(); const alias = document.getElementById('new-friend-alias').value.trim(); if (!name) { showToast("请输入姓名"); return; } if (!tempAvatarUrl) { showToast("请上传头像或输入URL"); return; } let contacts = []; try { contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]'); } catch (e) { contacts = []; } if (contacts.find(c => c.name === name || (alias && c.alias === alias))) { showToast("该好友已存在"); return; } const newContact = { id: Date.now(), name: name, alias: alias, avatar: tempAvatarUrl, lastMsg: "点击开始聊天", timestamp: Date.now(), previousMessageTime: null, signature: "", backgroundImage: "", isPinned: false, worldbookIds: [], timePerceptionEnabled: false, memoryDepth: 15, autoPostEnabled: false, autoCommentMomentEnabled: true, autoReplyCommentEnabled: true, autoPostInterval: 60, isBlocked: false, blockedMessages: [], isBlockedByChar: false, charBlockedMessages: [] };
+    window.saveNewFriend = () => { const name = document.getElementById('new-friend-name').value.trim(); const alias = document.getElementById('new-friend-alias').value.trim(); if (!name) { showToast("请输入姓名"); return; } if (!tempAvatarUrl) { showToast("请上传头像或输入URL"); return; } let contacts = []; try { contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]'); } catch (e) { contacts = []; } if (contacts.find(c => c.name === name || (alias && c.alias === alias))) { showToast("该好友已存在"); return; } const globalWbIds = []; try { const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]'); allWb.filter(b => b.isGlobal).forEach(b => globalWbIds.push(b.id)); } catch(e) {} const newContact = { id: Date.now(), name: name, alias: alias, avatar: tempAvatarUrl, lastMsg: "点击开始聊天", timestamp: Date.now(), previousMessageTime: null, signature: "", backgroundImage: "", isPinned: false, worldbookIds: globalWbIds, timePerceptionEnabled: false, memoryDepth: 15, autoPostEnabled: false, autoCommentMomentEnabled: true, autoReplyCommentEnabled: true, autoPostInterval: 60, isBlocked: false, blockedMessages: [], isBlockedByChar: false, charBlockedMessages: [] };
  contacts.unshift(newContact); try { localStorage.setItem(CHAT_DATA_KEY, JSON.stringify(contacts)); showToast("添加成功！"); closeAddFriendModal(); renderChatList(); renderContactList(); } catch (e) { console.error("Error saving contact:", e); showToast("保存失败，图片可能过大"); } };
 
     // NPC聊天数据缓存
@@ -26940,11 +27020,7 @@ ${actionInstruction}
         try {
             if (contact.worldbookIds && contact.worldbookIds.length > 0) {
                 const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-                const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-                activeWbs.forEach(wb => {
-                    worldbookContext += `[世界书: ${wb.title}]\n`;
-                    wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-                });
+                worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
             }
         } catch(e) {}
 
@@ -27073,11 +27149,7 @@ ${worldbookContext ? `背景设定(世界书)：\n${worldbookContext}\n` : ''}${
         try {
             if (contact.worldbookIds && contact.worldbookIds.length > 0) {
                 const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-                const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-                activeWbs.forEach(wb => {
-                    worldbookContext += `[世界书: ${wb.title}]\n`;
-                    wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-                });
+                worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
             }
         } catch(e) {}
 
@@ -27221,11 +27293,7 @@ ${msgContext ? msgContext : '无'}
         try {
             if (contact.worldbookIds && contact.worldbookIds.length > 0) {
                 const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-                const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-                activeWbs.forEach(wb => {
-                    worldbookContext += `[世界书: ${wb.title}]\n`;
-                    wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-                });
+                worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
             }
         } catch(e) {}
 
@@ -27364,11 +27432,7 @@ ${msgContext ? msgContext : '无'}
         try {
             if (contact.worldbookIds && contact.worldbookIds.length > 0) {
                 const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-                const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-                activeWbs.forEach(wb => {
-                    worldbookContext += `[世界书: ${wb.title}]\n`;
-                    wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-                });
+                worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
             }
         } catch(e) {}
 
@@ -27528,11 +27592,7 @@ ${msgContext ? msgContext : '无'}
         try {
             if (contact.worldbookIds && contact.worldbookIds.length > 0) {
                 const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-                const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-                activeWbs.forEach(wb => {
-                    worldbookContext += `[世界书: ${wb.title}]\n`;
-                    wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-                });
+                worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
             }
         } catch(e) {}
 
@@ -27672,11 +27732,7 @@ ${msgContext ? msgContext : '无'}
         try {
             if (contact.worldbookIds && contact.worldbookIds.length > 0) {
                 const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-                const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-                activeWbs.forEach(wb => {
-                    worldbookContext += `[世界书: ${wb.title}]\n`;
-                    wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-                });
+                worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
             }
         } catch(e) {}
 
@@ -30098,11 +30154,7 @@ ${msgContext ? msgContext : '无'}
         let worldbookContext = '';
         if (contact.worldbookIds && contact.worldbookIds.length > 0) {
             const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-            const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-            activeWbs.forEach(wb => {
-                worldbookContext += `\n[世界书: ${wb.title}]\n`;
-                wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-            });
+            worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
         }
         
         const recollectionData = getRecollections(currentChatContactId);
@@ -30445,11 +30497,7 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
         let worldbookContext = '';
         if (contact.worldbookIds && contact.worldbookIds.length > 0) {
             const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-            const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-            activeWbs.forEach(wb => {
-                worldbookContext += `\n[世界书: ${wb.title}]\n`;
-                wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-            });
+            worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
         }
 
         const recollectionData = getRecollections(currentChatContactId);
@@ -32293,6 +32341,15 @@ window.openTransferConfirmPopup = (amount) => {
         const contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]');
         const contact = contacts.find(c => c.id === currentChatContactId);
         tempSelectedWorldBookIds = contact.worldbookIds ? [...contact.worldbookIds] : [];
+        // 确保全局世界书在列表中（如果尚未绑定的话也预选上）
+        try {
+            const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
+            allWb.filter(b => b.isGlobal).forEach(b => {
+                if (!tempSelectedWorldBookIds.includes(b.id)) {
+                    tempSelectedWorldBookIds.push(b.id);
+                }
+            });
+        } catch(e) {}
         
         wbBindCallback = (selectedIds) => {
             const contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]');
@@ -32324,39 +32381,30 @@ window.openTransferConfirmPopup = (amount) => {
     
     if (type === 'worldbook') {
         const worldbooks = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-        if (worldbooks.length === 0) { listContainer.innerHTML = '<div class="wb-bind-list-empty">暂无世界书</div>'; } // 使用了正确的样式类
+        if (worldbooks.length === 0) { listContainer.innerHTML = '<div class="wb-bind-list-empty">暂无世界书</div>'; }
         worldbooks.forEach(wb => {
             const item = document.createElement('div');
-            item.className = 'wb-bind-list-item'; // 【修复】这里就是笔误的地方，改为了正确的样式名
+            item.className = 'wb-bind-list-item';
             const isSelected = wbBindMultiSelect ? (tempSelectedWorldBookIds && tempSelectedWorldBookIds.includes(wb.id)) : false;
-            if (isSelected) {
-                // 对于多选，我们用JS来添加一个视觉上的选中标记，例如复选框
-                item.innerHTML = `<div class="wb-bind-checkbox checked"></div>` + item.innerText;
-                item.classList.add('multi');
-            }
-            item.innerText = wb.title;
+            item.innerHTML = wb.title + (wb.isGlobal ? ' <span style="font-size:10px; color:var(--theme-pink-btn); background:#FFF0F5; padding:1px 5px; border-radius:6px;">全局</span>' : '');
             item.onclick = () => {
                 if (wbBindMultiSelect) {
-                    // 多选逻辑
                     const wasSelected = tempSelectedWorldBookIds.includes(wb.id);
                     if (wasSelected) {
                         tempSelectedWorldBookIds = tempSelectedWorldBookIds.filter(id => id !== wb.id);
-                        item.classList.remove('selected'); // 只是一个概念上的class，主要靠样式
+                        item.classList.remove('selected');
                     } else {
                         tempSelectedWorldBookIds.push(wb.id);
                         item.classList.add('selected');
                     }
-                    // 重新渲染列表以更新选中状态
                     openWorldBookBindModal(type);
                 } else {
-                    // 单选逻辑
                     if (wbBindCallback) wbBindCallback(wb.id);
                     closeWorldBookBindModal();
                 }
             };
-             // 如果是多选模式，并且当前项被选中，添加视觉提示
             if (wbBindMultiSelect && tempSelectedWorldBookIds && tempSelectedWorldBookIds.includes(wb.id)) {
-                item.style.backgroundColor = '#FFF0F5'; // 比如给个淡粉色背景
+                item.style.backgroundColor = '#FFF0F5';
                 item.style.fontWeight = 'bold';
             }
             listContainer.appendChild(item);
@@ -32472,17 +32520,24 @@ window.openTransferConfirmPopup = (amount) => {
         const contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]');
         const idx = contacts.findIndex(c => c.id === currentChatContactId);
         if (idx > -1) {
-            contacts[idx].worldbookIds = [];
+            const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
+            const globalIds = allWb.filter(b => b.isGlobal).map(b => b.id);
+            contacts[idx].worldbookIds = contacts[idx].worldbookIds.filter(id => globalIds.includes(id));
             localStorage.setItem(CHAT_DATA_KEY, JSON.stringify(contacts));
             const wbDisplay = document.getElementById('role-wb-display');
-            wbDisplay.textContent = '未绑定';
-            wbDisplay.className = 'unbound';
-            document.getElementById('role-wb-clear-btn').style.display = 'none';
-            showToast('已清除世界书绑定');
+            const clearBtn = document.getElementById('role-wb-clear-btn');
+            if (contacts[idx].worldbookIds.length > 0) {
+                const names = contacts[idx].worldbookIds.map(id => { const b = allWb.find(b => b.id === id); return b ? b.title : '未知'; });
+                wbDisplay.textContent = `已绑定: ${names.join(', ')}`;
+                wbDisplay.className = 'bound';
+                clearBtn.style.display = 'block';
+            } else {
+                wbDisplay.textContent = '未绑定';
+                wbDisplay.className = 'unbound';
+                clearBtn.style.display = 'none';
+            }
+            showToast('已清除非全局世界书');
         }
-    };
-    window.clearWorldBookBinding = () => {
-       // ... 原有的清除世界书代码 ...
     };
     
     // 新增：打开表情包选择弹窗与清除绑定
@@ -32862,14 +32917,10 @@ window.openTransferConfirmPopup = (amount) => {
         let worldbookContext = "";
         if (contact.worldbookIds && contact.worldbookIds.length > 0) {
             const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-            const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-            activeWbs.forEach(wb => {
-                worldbookContext += `\n[世界书: ${wb.title}]\n`;
-                wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-            });
+            const userVerifyMsgs = (contact.charBlockedMessages || []).filter(m => m.sender === 'user');
+            const lastVerifyText = userVerifyMsgs.length > 0 ? (userVerifyMsgs[userVerifyMsgs.length - 1].sentences || []).join(' ') : '';
+            worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, lastVerifyText);
         }
-
-        // 构建聊天历史
         let historyStr = recentMsgs.map(m => {
             let sender = m.type === 'sent' ? uName : charName;
             if (m.isEmotionImage) return `[${sender} 发送了一张表情包: ${m.text}]`;
@@ -33966,11 +34017,9 @@ document.getElementById('phone-frame-switch').checked = localStorage.getItem(PHO
            let worldbookContext = "";
         if (contact.worldbookIds && contact.worldbookIds.length > 0) {
             const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-            const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-            activeWbs.forEach(wb => {
-                worldbookContext += `\n[世界书: ${wb.title}]\n`;
-                wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-            });
+            const lastUserMsg = [...recentMsgs].reverse().find(m => m.type === 'sent');
+            const userMsgText = lastUserMsg ? lastUserMsg.text : '';
+            worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, userMsgText);
         }
 
            // 提取频率设定
@@ -34990,11 +35039,7 @@ ${emotionFreq !== 'none' ? (isForceEmotionTurn
         let worldbookContext = "";
         if (contact.worldbookIds && contact.worldbookIds.length > 0) {
             const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-            const activeWbs = allWb.filter(b => contact.worldbookIds.includes(b.id));
-            activeWbs.forEach(wb => {
-                worldbookContext += `\n[世界书: ${wb.title}]\n`;
-                wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-            });
+            worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
         }
         
         // --- 新增：获取最近聊天记录 ---
@@ -36325,11 +36370,7 @@ window.executeDisableLock = () => {
             let worldbookContext = "";
             if (roleContact.worldbookIds && roleContact.worldbookIds.length > 0) {
                 const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-                const activeWbs = allWb.filter(b => roleContact.worldbookIds.includes(b.id));
-                activeWbs.forEach(wb => {
-                    worldbookContext += `\n[世界书: ${wb.title}]\n`;
-                    wb.entries.forEach(e => { worldbookContext += `${e.key ? e.key+': ' : ''}${e.content}\n`; });
-                });
+                worldbookContext = buildWorldbookContext(allWb, roleContact.worldbookIds, '');
             }
             if (worldbookContext) {
                 sysPrompt += `\n相关背景设定(世界书)：\n${worldbookContext}`;
