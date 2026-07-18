@@ -12829,10 +12829,10 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
              <button class="chat-multiselect-delete-btn" onclick="executeBatchDelete()">删除</button>
         </div>
 
-        </div>
+    </div>
 </div>
 
-<!-- 语音通话页面（全局层级，不受页面切换影响） -->
+<!-- 语音通话页面（全局浮层，不依赖chat-app-page） -->
 <div id="voice-call-page">
     <button id="voice-call-minimize-btn" class="voice-call-minimize-btn" title="收起">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -12860,7 +12860,7 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
         <img src="https://img.heliar.top/file/1781886601052_电话关闭_phone-off.png" class="voice-call-hangup" onclick="hangUpVoiceCall()">
     </div>
 </div>
-<!-- 语音通话悬浮窗（收起状态，全局层级，在所有页面之上显示） -->
+<!-- 语音通话悬浮窗（收起状态，全局浮层） -->
 <div id="voice-call-float" onclick="expandVoiceCall(event)">
     <img id="vc-float-avatar" class="vc-float-avatar" src="">
     <div id="vc-float-status" class="vc-float-status">通话中</div>
@@ -16614,7 +16614,8 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
         document.getElementById('redpacket-overlay'),
         document.getElementById('transfer-confirm-overlay'),
         document.getElementById('voice-call-float'),
-        document.getElementById('voice-call-page')
+        document.getElementById('voice-call-page'),
+        document.getElementById('call-status-toast')
       ].filter(Boolean);
       
       if (enabled) {
@@ -16649,22 +16650,10 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
                 phoneScreen.style.background = 'none';
             }
         }
-        // 关闭手机框模式时，把弹层移回原位置
-        // 语音通话元素现在默认在 body 下（全局层级），移回 body
-        // 其他弹层移回 #app-wrapper 内部
-        const voiceCallOverlays = [
-            document.getElementById('voice-call-float'),
-            document.getElementById('voice-call-page')
-        ].filter(Boolean);
+        // 关闭手机框模式时，把弹层移回 #app-wrapper 内部，恢复普通模式布局
         globalOverlays.forEach(overlay => {
-            if (voiceCallOverlays.includes(overlay)) {
-                if (bodyEl && !bodyEl.contains(overlay)) {
-                    bodyEl.appendChild(overlay);
-                }
-            } else {
-                if (appWrapper && !appWrapper.contains(overlay)) {
-                    appWrapper.appendChild(overlay);
-                }
+            if (appWrapper && !appWrapper.contains(overlay)) {
+                appWrapper.appendChild(overlay);
             }
         });
         if (frameSettingsModule) {
@@ -30051,6 +30040,7 @@ ${msgContext ? msgContext : '无'}
     let voiceCallDragState = null;  // 悬浮窗拖动状态对象
     let voiceCallIsIncoming = false; // 是否为来电（角色发起的通话）
     let voiceCallIncomingMsgId = null; // 来电对应的消息ID
+    let voiceCallContactId = null; // 通话中的联系人ID（独立于currentChatContactId，离开聊天页面后仍保留）
 
     function startVoiceCallRingtone(ringtoneUrl) {
         stopVoiceCallRingtone();
@@ -30092,10 +30082,11 @@ ${msgContext ? msgContext : '无'}
 
     window.startVoiceCall = async () => {
         if (!currentChatContactId) return;
+        voiceCallContactId = currentChatContactId; // 记录通话联系人ID
         document.getElementById('chat-extra-menu').classList.remove('active');
         
         const contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]');
-        const contact = contacts.find(c => String(c.id) === String(currentChatContactId));
+        const contact = contacts.find(c => String(c.id) === String(voiceCallContactId));
         if (!contact) return;
         
         const callPage = document.getElementById('voice-call-page');
@@ -30153,7 +30144,7 @@ ${msgContext ? msgContext : '无'}
         const uName = contact.userName || globalProfile.nickname || 'User';
         const uPersona = contact.userPersona || '一个普通用户';
         
-        const key = getMessagesKey(currentChatContactId);
+        const key = getMessagesKey(voiceCallContactId);
         const messages = JSON.parse(localStorage.getItem(key) || '[]');
         const depth = contact.memoryDepth || 15;
         const recentMsgs = messages.slice(-depth);
@@ -30170,7 +30161,7 @@ ${msgContext ? msgContext : '无'}
             worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
         }
         
-        const recollectionData = getRecollections(currentChatContactId);
+        const recollectionData = getRecollections(voiceCallContactId);
         const recollectionContext = recollectionData.items.map(item => item.text).join('\n');
         
         const sysPrompt = `你现在扮演角色：${contact.alias || contact.name}。
@@ -30251,8 +30242,8 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
                 voiceCallOutgoingRejected = true;
 
                 // 立即保存角色拒绝消息到聊天记录（不依赖 hangUpVoiceCall 延迟保存）
-                if (currentChatContactId) {
-                    const key = getMessagesKey(currentChatContactId);
+                if (voiceCallContactId) {
+                    const key = getMessagesKey(voiceCallContactId);
                     let msgs = JSON.parse(localStorage.getItem(key) || '[]');
                     // 隐藏通话记录（给AI读取）
                     msgs.push({
@@ -30306,6 +30297,7 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
         // 如果已在通话中，忽略新来电
         if (voiceCallAccepted || document.getElementById('voice-call-page').classList.contains('active')) return;
 
+        voiceCallContactId = contactId; // 记录通话联系人ID
         const contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]');
         const contact = contacts.find(c => String(c.id) === String(contactId));
         if (!contact) return;
@@ -30367,8 +30359,8 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
     window.answerIncomingVoiceCall = () => {
         if (!voiceCallIsIncoming) return;
         // 更新来电消息状态为已接听
-        if (voiceCallIncomingMsgId && currentChatContactId) {
-            const key = getMessagesKey(currentChatContactId);
+        if (voiceCallIncomingMsgId && voiceCallContactId) {
+            const key = getMessagesKey(voiceCallContactId);
             let messages = JSON.parse(localStorage.getItem(key) || '[]');
             const msgIndex = messages.findIndex(m => String(m.id) === String(voiceCallIncomingMsgId) && m.isIncomingCall);
             if (msgIndex !== -1) {
@@ -30470,7 +30462,7 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
     }
 
     window.sendVoiceCallMessage = async () => {
-        if (!voiceCallAccepted || !currentChatContactId) return;
+        if (!voiceCallAccepted || !voiceCallContactId) return;
         const input = document.getElementById('voice-call-input');
         const text = input.value.trim();
         if (!text) return;
@@ -30489,14 +30481,14 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
         if (!settings?.api?.url || !settings?.api?.key) return;
 
         const contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]');
-        const contact = contacts.find(c => String(c.id) === String(currentChatContactId));
+        const contact = contacts.find(c => String(c.id) === String(voiceCallContactId));
         if (!contact) return;
 
         const globalProfile = getUserProfile();
         const uName = contact.userName || globalProfile.nickname || 'User';
         const uPersona = contact.userPersona || '一个普通用户';
 
-        const key = getMessagesKey(currentChatContactId);
+        const key = getMessagesKey(voiceCallContactId);
         const messages = JSON.parse(localStorage.getItem(key) || '[]');
         const depth = contact.memoryDepth || 15;
         const recentMsgs = messages.slice(-depth);
@@ -30513,7 +30505,7 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
             worldbookContext = buildWorldbookContext(allWb, contact.worldbookIds, '');
         }
 
-        const recollectionData = getRecollections(currentChatContactId);
+        const recollectionData = getRecollections(voiceCallContactId);
         const recollectionContext = recollectionData.items.map(item => item.text).join('\n');
 
         const callHistory = voiceCallMessages.map(m => {
@@ -30725,8 +30717,8 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
         const savedDuration = voiceCallDurationSeconds;
 
         // 保存通话记录到消息（用于给AI读取，但不显示在界面上）
-        if (currentChatContactId) {
-            const key = getMessagesKey(currentChatContactId);
+        if (voiceCallContactId) {
+            const key = getMessagesKey(voiceCallContactId);
             let messages = JSON.parse(localStorage.getItem(key) || '[]');
 
             // 来电相关：更新 callData
@@ -30749,7 +30741,7 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
 
             // 通话接通后挂断：保存通话记录（界面显示摘要，点击展开详情）
             if (wasAccepted) {
-                const sysContact = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]').find(c => String(c.id) === String(currentChatContactId));
+                const sysContact = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]').find(c => String(c.id) === String(voiceCallContactId));
                 const sysCharName = sysContact ? (sysContact.alias || sysContact.name) : '好友';
                 const sysUName = getUserProfile().nickname || 'User';
                 const transcriptStr = formatCallTranscript(savedTranscript, sysUName, sysCharName);
@@ -30775,6 +30767,7 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
         voiceCallIncomingMsgId = null;
         voiceCallOutgoingRejected = false;
         voiceCallRejectReason = '';
+        voiceCallContactId = null; // 清除通话联系人ID
 
         document.getElementById('voice-call-duration').classList.remove('visible');
         document.getElementById('voice-call-duration').textContent = '';
@@ -31789,7 +31782,8 @@ window.openTransferConfirmPopup = (amount) => {
     // 接听来电：直接进入通话页面（跳过呼叫等待阶段）
     window.acceptIncomingCall = async (msgId) => {
         if (!currentChatContactId) return;
-        const key = getMessagesKey(currentChatContactId);
+        voiceCallContactId = currentChatContactId; // 记录通话联系人ID
+        const key = getMessagesKey(voiceCallContactId);
         let messages = JSON.parse(localStorage.getItem(key) || '[]');
         const msgIndex = messages.findIndex(m => String(m.id) === String(msgId) && m.isIncomingCall);
         if (msgIndex === -1) return;
@@ -31802,7 +31796,7 @@ window.openTransferConfirmPopup = (amount) => {
 
         // 获取联系人信息
         const contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]');
-        const contact = contacts.find(c => String(c.id) === String(currentChatContactId));
+        const contact = contacts.find(c => String(c.id) === String(voiceCallContactId));
         if (!contact) return;
 
         // 设置来电状态
