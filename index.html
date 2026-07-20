@@ -10,9 +10,17 @@
     <meta name="apple-mobile-web-app-title" content="圈圈机">
     <title>圈圈机</title>
     
-    <!-- 设置主屏幕图标和浏览器图标 -->
-    <link rel="apple-touch-icon" href="https://img.heliar.top/file/1773263760361_IMG_4342.jpeg">
-    <link rel="icon" href="https://img.heliar.top/file/1773263760361_IMG_4342.jpeg">
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="public/manifest.json">
+    
+    <!-- iOS 主屏幕图标 (180x180 适用于 iPhone 6 Plus 及以上) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="public/apple-touch-icon.png">
+    <!-- iPad 主屏幕图标 -->
+    <link rel="apple-touch-icon" sizes="152x152" href="public/apple-touch-icon-152.png">
+    <!-- 防止 iOS 给图标添加高光效果 -->
+    <link rel="apple-touch-icon-precomposed" sizes="180x180" href="public/apple-touch-icon.png">
+    <!-- 浏览器 Favicon -->
+    <link rel="icon" type="image/png" sizes="180x180" href="public/apple-touch-icon.png">
     
     <style>
         /* ========================= 外卖订单历史页面美化 ========================= */
