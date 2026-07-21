@@ -27786,17 +27786,20 @@ ${actionInstruction}
         const firstMember = memberInfoMap[group.memberIds[0]];
         const uPersona = (firstMember && firstMember.userPersona) || '一个普通用户';
 
-        for (let i = 0; i < shuffledIds.length; i++) {
-            const memberId = shuffledIds[i];
+        // === 阶段1：并行调用所有角色的API，收集回复 ===
+        const replyResults = []; // { memberId, sentences: [{text, replyToInfo, grabbedRedPacket}] }
+
+        const apiPromises = shuffledIds.map(async (memberId, i) => {
             const member = memberInfoMap[memberId];
-            if (!member) continue;
+            if (!member) return null;
 
             try {
-                // 重新读取最新消息（包含之前成员的回复）
-                try { messages = JSON.parse(localStorage.getItem(msgKey) || '[]'); } catch(e) {}
+                // 重新读取最新消息
+                let currentMsgs = [];
+                try { currentMsgs = JSON.parse(localStorage.getItem(msgKey) || '[]'); } catch(e) {}
 
-                // 构建对话上下文（包含所有成员的发言）
-                const recentMsgs = messages.slice(-30);
+                // 构建对话上下文
+                const recentMsgs = currentMsgs.slice(-30);
                 let chatContext = '';
                 recentMsgs.forEach(m => {
                     if (m.isSystemMsg) {
@@ -27818,7 +27821,6 @@ ${actionInstruction}
                 let systemPrompt = `你是${member.name}，正在一个群聊中。群名是"${group.groupName}"。\n`;
                 systemPrompt += `这个群是用户"${uName}"创建的，你是被${uName}拉进这个群的。\n`;
 
-                // 角色人设
                 if (member.persona) {
                     systemPrompt += `\n【你的人设】\n${member.persona}\n`;
                 }
@@ -27826,25 +27828,19 @@ ${actionInstruction}
                     systemPrompt += `你的个性签名是：${member.signature}\n`;
                 }
 
-                // 用户人设
                 systemPrompt += `\n【用户信息】\n用户的名字是"${uName}"。\n用户人设：${uPersona}\n`;
 
-                // 其他群成员信息（含互相认识逻辑）
                 const otherMembers = allMembers.filter(m => m.id !== memberId);
                 if (otherMembers.length > 0) {
                     systemPrompt += `\n【群聊中的其他成员】\n`;
                     otherMembers.forEach(om => {
-                        // 检查当前角色的人设中是否提到了该成员的名字
                         const memberName = om.name;
                         const personaMentionsOther = member.persona && member.persona.includes(memberName);
-                        // 检查对方人设中是否提到了当前角色
                         const otherMentionsMe = om.persona && om.persona.includes(member.name);
 
                         if (personaMentionsOther || otherMentionsMe) {
                             systemPrompt += `- ${memberName}：你认识这个人。`;
-                            // 如果对方人设中有关于当前角色的描述，也告知
                             if (otherMentionsMe && om.persona) {
-                                // 提取包含当前角色名的句子
                                 const sentences = om.persona.split(/[。！？\n]/).filter(s => s.includes(member.name));
                                 if (sentences.length > 0) {
                                     systemPrompt += `你对${memberName}的了解：${sentences.join('；')}`;
@@ -27853,7 +27849,6 @@ ${actionInstruction}
                         } else {
                             systemPrompt += `- ${memberName}：你不认识这个人（你的设定中没有提到过TA），如果TA跟你说话，你应该表现出不认识的态度。`;
                         }
-                        // 如果对方有公开的个性签名
                         const omContact = memberInfoMap[om.id];
                         if (omContact && omContact.signature) {
                             systemPrompt += ` TA的签名是"${omContact.signature}"。`;
@@ -27873,7 +27868,7 @@ ${actionInstruction}
                 systemPrompt += `   - 回复其他成员的消息：【@回复:成员名】我也觉得！\n`;
                 systemPrompt += `   - 不需要引用回复时，直接说内容即可，不要加标记。\n`;
                 systemPrompt += `7. 你是被${uName}拉进这个群的，如果是刚进群（群聊记录很少或只有系统消息），要自然地做出刚被拉进群的反应，比如打招呼、疑惑为什么被拉进来、对群名好奇等，反应要符合你的性格。\n`;
-                systemPrompt += `8. 你的回复必须是一个JSON对象，格式为{"reply":["消息1","消息2","消息3"]}，reply数组包含3到6条消息，每条消息作为一个独立的聊天气泡。将你的完整回复自然地拆分成多条消息，模拟真实聊天节奏。不要加任何前缀或角色名标记。\n`;
+                systemPrompt += `8. 你的回复必须是一个JSON对象，格式为{"reply":["消息1","消息2","消息3"]}，reply数组包含2到4条消息，每条消息作为一个独立的聊天气泡。将你的完整回复自然地拆分成多条消息，模拟真实聊天节奏。不要加任何前缀或角色名标记。不要超过4条消息。\n`;
 
                 // 世界书
                 if (member.worldbookIds && member.worldbookIds.length > 0) {
@@ -27957,50 +27952,63 @@ ${actionInstruction}
                     body: bodyData
                 });
 
-                if (!response.ok) continue;
+                if (!response.ok) return null;
                 const data = await response.json();
 
                 let replyContent = '';
+                let wasTruncated = false;
                 if (isGemini) {
                     replyContent = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+                    if (data.candidates?.[0]?.finishReason === 'MAX_TOKENS' || data.candidates?.[0]?.finishReason === 'SAFETY') wasTruncated = true;
                 } else {
                     replyContent = data.choices?.[0]?.message?.content?.trim();
+                    if (data.choices?.[0]?.finish_reason === 'length') wasTruncated = true;
                 }
-                if (!replyContent) continue;
+                if (!replyContent) return null;
 
                 // 解析JSON格式的回复
                 let sentences = [];
-                replyContent = cleanAIResponse(replyContent, false);
+                replyContent = cleanAIResponse(replyContent, wasTruncated);
                 try {
                     const parsed = JSON.parse(replyContent);
                     if (Array.isArray(parsed.reply)) {
                         sentences = parsed.reply.map(s => String(s).trim()).filter(s => s);
                     } else {
-                        sentences = [replyContent];
+                        sentences = [String(replyContent).replace(/[{}\[\]"]/g, '').trim()];
                     }
                 } catch(e) {
-                    // JSON解析失败，回退为单条消息
-                    sentences = [replyContent];
+                    let fallback = replyContent;
+                    fallback = fallback.replace(/^\s*\{/, '').replace(/\}\s*$/, '');
+                    fallback = fallback.replace(/"reply"\s*:\s*\[/, '').replace(/\]\s*$/, '');
+                    const textMatches = fallback.match(/"([^"]+)"/g);
+                    if (textMatches && textMatches.length > 0) {
+                        sentences = textMatches.map(m => m.replace(/^"|"$/g, '').trim()).filter(s => s);
+                    } else {
+                        sentences = [fallback.replace(/["\[\]{}]/g, '').trim()];
+                    }
+                }
+
+                // 限制最多4条消息
+                if (sentences.length > 4) {
+                    sentences = sentences.slice(0, 4);
                 }
 
                 // 使用备注名（如果有）
                 const alias = (group.memberAliases && group.memberAliases[memberId]) || '';
 
-                // 逐条发送消息
+                // 预处理每条消息：解析引用和红包
+                const processedMessages = [];
                 for (let sIdx = 0; sIdx < sentences.length; sIdx++) {
                     let replyText = sentences[sIdx];
                     if (!replyText) continue;
 
-                    // 解析引用回复标记 【@回复:发送者名】
+                    // 解析引用回复标记
                     let replyToInfo = null;
                     const replyMatch = replyText.match(/^【@回复:(.+?)】/);
                     if (replyMatch) {
                         const replyToName = replyMatch[1];
                         replyText = replyText.replace(/^【@回复:.+?】\s*/, '');
-                        // 在最近消息中查找被引用的消息
-                        try { messages = JSON.parse(localStorage.getItem(msgKey) || '[]'); } catch(e) { messages = []; }
-                        const recentForLookup = messages.slice(-30);
-                        const targetMsg = [...recentForLookup].reverse().find(m => {
+                        const targetMsg = [...recentMsgs].reverse().find(m => {
                             if (m.isSystemMsg) return false;
                             const senderName = m.type === 'sent' ? uName : (m.senderName || '未知');
                             return senderName === replyToName;
@@ -28015,97 +28023,116 @@ ${actionInstruction}
                         }
                     }
 
-                    // 解析抢红包标记 【抢红包】（只在第一条消息中检查）
+                    // 解析抢红包标记（只在第一条消息中检查）
                     let grabbedRedPacket = false;
                     if (sIdx === 0 && replyText.includes('【抢红包】')) {
                         replyText = replyText.replace(/【抢红包】\s*/g, '');
-                        // 执行抢红包
-                        try {
-                            let curMsgs = JSON.parse(localStorage.getItem(msgKey) || '[]');
-                            const rpMsgIdx = curMsgs.findIndex(m => m.isRedPacket && m.redPacketData && m.redPacketData.isGroupRedPacket && m.redPacketData.remainCount > 0 && !(m.redPacketData.grabbers || []).some(g => g.memberId === memberId));
-                            if (rpMsgIdx > -1) {
-                                const rpData = curMsgs[rpMsgIdx].redPacketData;
-                                const remainCount = rpData.remainCount;
-                                const totalAmount = parseFloat(rpData.amount);
-                                const alreadyGrabbed = rpData.grabbers || [];
-                                const alreadyGrabbedTotal = alreadyGrabbed.reduce((s, g) => s + parseFloat(g.amount), 0);
-
-                                if (remainCount === 1) {
-                                    var grabAmount = Math.round((totalAmount - alreadyGrabbedTotal) * 100) / 100;
-                                } else {
-                                    const remainAmount = totalAmount - alreadyGrabbedTotal;
-                                    const minGrab = 0.01;
-                                    const maxGrab = remainAmount / remainCount * 2;
-                                    var grabAmount = Math.round(Math.max(minGrab, Math.random() * Math.min(maxGrab, remainAmount - (remainCount - 1) * minGrab)) * 100) / 100;
-                                }
-
-                                if (!rpData.grabbers) rpData.grabbers = [];
-                                rpData.grabbers.push({
-                                    memberId: memberId,
-                                    memberName: alias || member.alias || member.name,
-                                    memberAvatar: member.avatar || '',
-                                    amount: grabAmount,
-                                    timestamp: Date.now()
-                                });
-                                rpData.remainCount = Math.max(0, rpData.remainCount - 1);
-                                if (rpData.remainCount === 0) {
-                                    rpData.status = 'all_grabbed';
-                                }
-                                curMsgs[rpMsgIdx].redPacketData = rpData;
-                                localStorage.setItem(msgKey, JSON.stringify(curMsgs));
-                                grabbedRedPacket = true;
-                            }
-                        } catch(e) {}
+                        grabbedRedPacket = true;
                     }
 
                     if (!replyText) continue;
-
-                    // 添加群消息
-                    const newMsg = {
-                        id: Date.now() + i + sIdx + Math.random(),
-                        type: 'received',
-                        text: replyText,
-                        timestamp: Date.now(),
-                        isGroupMsg: true,
-                        senderId: memberId,
-                        senderName: alias || member.alias || member.name,
-                        senderAvatar: member.avatar
-                    };
-                    if (replyToInfo) {
-                        newMsg.replyTo = replyToInfo;
-                    }
-
-                    // 重新读取消息并追加
-                    try { messages = JSON.parse(localStorage.getItem(msgKey) || '[]'); } catch(e) { messages = []; }
-                    messages.push(newMsg);
-                    localStorage.setItem(msgKey, JSON.stringify(messages));
-
-                    // 更新群的lastMsg（使用最后一条消息）
-                    if (sIdx === sentences.length - 1) {
-                        let gl = getGroupChatList();
-                        const gIdx = gl.findIndex(g => g.groupId === groupId);
-                        if (gIdx > -1) {
-                            gl[gIdx].lastMsg = replyText;
-                            gl[gIdx].timestamp = Date.now();
-                            saveGroupChatList(gl);
-                        }
-                    }
-
-                    // 如果仍在当前群聊，刷新
-                    if (currentChatContactId === groupId) {
-                        renderConversationMessages();
-                    } else if (sIdx === 0) {
-                        // 不在当前群聊页面，弹出通知（仅第一条）
-                        try { showGroupMessageNotification(groupId, alias || member.alias || member.name, replyText, member.avatar); } catch(e) {}
-                    }
-
-                    // 消息间延迟（最后一条不延迟）
-                    if (sIdx < sentences.length - 1) {
-                        await sleep(Math.random() * 500 + 500);
-                    }
+                    processedMessages.push({ text: replyText, replyToInfo, grabbedRedPacket });
                 }
+
+                return { memberId, alias, memberName: alias || member.alias || member.name, memberAvatar: member.avatar, messages: processedMessages };
             } catch(e) {
                 console.error(`Group AI reply error for member ${memberId}:`, e);
+                return null;
+            }
+        });
+
+        // 并行等待所有API调用完成
+        const results = await Promise.all(apiPromises);
+
+        // === 阶段2：所有回复加载完成后，一次性发送所有消息 ===
+        let lastMsgText = '';
+        for (const result of results) {
+            if (!result || !result.messages || result.messages.length === 0) continue;
+
+            // 处理抢红包
+            for (const msg of result.messages) {
+                if (msg.grabbedRedPacket) {
+                    try {
+                        let curMsgs = JSON.parse(localStorage.getItem(msgKey) || '[]');
+                        const rpMsgIdx = curMsgs.findIndex(m => m.isRedPacket && m.redPacketData && m.redPacketData.isGroupRedPacket && m.redPacketData.remainCount > 0 && !(m.redPacketData.grabbers || []).some(g => g.memberId === result.memberId));
+                        if (rpMsgIdx > -1) {
+                            const rpData = curMsgs[rpMsgIdx].redPacketData;
+                            const remainCount = rpData.remainCount;
+                            const totalAmount = parseFloat(rpData.amount);
+                            const alreadyGrabbed = rpData.grabbers || [];
+                            const alreadyGrabbedTotal = alreadyGrabbed.reduce((s, g) => s + parseFloat(g.amount), 0);
+
+                            if (remainCount === 1) {
+                                var grabAmount = Math.round((totalAmount - alreadyGrabbedTotal) * 100) / 100;
+                            } else {
+                                const remainAmount = totalAmount - alreadyGrabbedTotal;
+                                const minGrab = 0.01;
+                                const maxGrab = remainAmount / remainCount * 2;
+                                var grabAmount = Math.round(Math.max(minGrab, Math.random() * Math.min(maxGrab, remainAmount - (remainCount - 1) * minGrab)) * 100) / 100;
+                            }
+
+                            if (!rpData.grabbers) rpData.grabbers = [];
+                            rpData.grabbers.push({
+                                memberId: result.memberId,
+                                memberName: result.memberName,
+                                memberAvatar: result.memberAvatar || '',
+                                amount: grabAmount,
+                                timestamp: Date.now()
+                            });
+                            rpData.remainCount = Math.max(0, rpData.remainCount - 1);
+                            if (rpData.remainCount === 0) {
+                                rpData.status = 'all_grabbed';
+                            }
+                            curMsgs[rpMsgIdx].redPacketData = rpData;
+                            localStorage.setItem(msgKey, JSON.stringify(curMsgs));
+                        }
+                    } catch(e) {}
+                }
+            }
+
+            // 添加该角色的所有消息
+            try { messages = JSON.parse(localStorage.getItem(msgKey) || '[]'); } catch(e) { messages = []; }
+            for (const msg of result.messages) {
+                const newMsg = {
+                    id: Date.now() + Math.random(),
+                    type: 'received',
+                    text: msg.text,
+                    timestamp: Date.now(),
+                    isGroupMsg: true,
+                    senderId: result.memberId,
+                    senderName: result.memberName,
+                    senderAvatar: result.memberAvatar
+                };
+                if (msg.replyToInfo) {
+                    newMsg.replyTo = msg.replyToInfo;
+                }
+                messages.push(newMsg);
+                lastMsgText = msg.text;
+            }
+            localStorage.setItem(msgKey, JSON.stringify(messages));
+        }
+
+        // 更新群的lastMsg
+        if (lastMsgText) {
+            let gl = getGroupChatList();
+            const gIdx = gl.findIndex(g => g.groupId === groupId);
+            if (gIdx > -1) {
+                gl[gIdx].lastMsg = lastMsgText;
+                gl[gIdx].timestamp = Date.now();
+                saveGroupChatList(gl);
+            }
+        }
+
+        // 刷新UI
+        if (currentChatContactId === groupId) {
+            renderConversationMessages();
+        }
+        // 对不在当前页面的群聊弹出通知
+        if (currentChatContactId !== groupId) {
+            for (const result of results) {
+                if (!result || !result.messages || result.messages.length === 0) continue;
+                try { showGroupMessageNotification(groupId, result.memberName, result.messages[0].text, result.memberAvatar); } catch(e) {}
+                break; // 只弹一次通知
             }
         }
 
