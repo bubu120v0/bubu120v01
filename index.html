@@ -5732,29 +5732,24 @@
             grid-template-columns: repeat(3, 1fr);
             background-color: #f6f2f4;
             padding-bottom: env(safe-area-inset-bottom, 0);
+            flex-shrink: 0;
         }
 
         /* ===== 移动端支付密码弹窗 - 底部半屏弹出（仿微信） ===== */
         @media (max-width: 500px) {
             #transfer-confirm-popup {
                 position: fixed !important;
-                bottom: 0 !important;
+                bottom: 60px !important;
                 left: 5% !important;
                 width: 90% !important;
-                max-height: 70vh !important;
                 display: flex !important;
                 flex-direction: column !important;
-                overflow-y: auto !important;
                 border-radius: 16px 16px 0 0 !important;
                 transform: translateY(100%);
                 transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
             }
             #transfer-confirm-overlay.active #transfer-confirm-popup {
                 transform: translateY(0) !important;
-            }
-            /* 外卖付款弹窗高度66% */
-            #transfer-confirm-popup.food-payment {
-                max-height: 67vh !important;
             }
             .confirm-popup-header {
                 padding: 8px 12px 4px;
@@ -6238,13 +6233,11 @@
         }
         body.phone-frame-active #transfer-confirm-popup {
             position: absolute !important;
-            bottom: 0 !important;
+            bottom: 60px !important;
             left: 0 !important;
             width: 100% !important;
-            max-height: 70% !important;
             display: flex !important;
             flex-direction: column !important;
-            overflow-y: auto !important;
             border-radius: 16px 16px 0 0 !important;
             transform: translateY(100%);
             z-index: 1000;
@@ -6252,11 +6245,6 @@
         }
         body.phone-frame-active #transfer-confirm-overlay.active #transfer-confirm-popup {
             transform: translateY(0) !important;
-        }
-
-        /* 外卖付款弹窗高度66% */
-        body.phone-frame-active #transfer-confirm-popup.food-payment {
-            max-height: 67% !important;
         }
 
         /* 手机框模式下通讯录页面适配 */
@@ -27744,6 +27732,14 @@ ${actionInstruction}
     window.triggerGroupAIReply = async () => {
         if (!currentChatContactId || !currentChatContactId.startsWith('group_')) return;
         const groupId = currentChatContactId;
+
+        // 中止之前正在进行的群聊AI回复请求
+        if (groupAiReplyAbortController) {
+            groupAiReplyAbortController.abort();
+        }
+        groupAiReplyAbortController = new AbortController();
+        const groupAbortSignal = groupAiReplyAbortController.signal;
+
         const settings = JSON.parse(localStorage.getItem(ALL_SETTINGS_KEY));
         if (!settings?.api?.url || !settings?.api?.key) { showToast("请先配置API"); return; }
 
@@ -27949,7 +27945,8 @@ ${actionInstruction}
                 const response = await fetch(fetchUrl, {
                     method: 'POST',
                     headers: headers,
-                    body: bodyData
+                    body: bodyData,
+                    signal: groupAbortSignal
                 });
 
                 if (!response.ok) return null;
@@ -28042,7 +28039,29 @@ ${actionInstruction}
         });
 
         // 并行等待所有API调用完成
-        const results = await Promise.all(apiPromises);
+        let results;
+        try {
+            results = await Promise.all(apiPromises);
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                // 群聊AI回复被中止（用户点击了重说），静默处理
+                if (signatureEl) {
+                    const g = getGroupInfo(groupId);
+                    signatureEl.textContent = g ? ((g.memberIds.length + 1) + '人') : '';
+                    signatureEl.classList.remove('typing-anim');
+                }
+                groupAiReplyAbortController = null;
+                return;
+            }
+            console.error('Group AI reply error:', e);
+            if (signatureEl) {
+                const g = getGroupInfo(groupId);
+                signatureEl.textContent = g ? ((g.memberIds.length + 1) + '人') : '';
+                signatureEl.classList.remove('typing-anim');
+            }
+            groupAiReplyAbortController = null;
+            return;
+        }
 
         // === 阶段2：所有回复加载完成后，一次性发送所有消息 ===
         let lastMsgText = '';
@@ -28144,9 +28163,8 @@ ${actionInstruction}
         }
 
         renderChatList();
+        groupAiReplyAbortController = null;
     };
-
-    // ========================= 群聊功能 END =========================
 
     // NPC聊天数据缓存
     let npcChatCache = [];
@@ -32678,6 +32696,12 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
         if (!currentChatContactId) return;
         document.getElementById('chat-extra-menu').classList.remove('active');
 
+        // 先中止正在进行的群聊AI回复
+        if (groupAiReplyAbortController) {
+            groupAiReplyAbortController.abort();
+            groupAiReplyAbortController = null;
+        }
+
         const key = getMessagesKey(currentChatContactId);
         let messages = JSON.parse(localStorage.getItem(key) || '[]');
 
@@ -32707,13 +32731,18 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
 
         // 群聊重试走群聊AI回复
         if (String(currentChatContactId).startsWith('group_')) {
-            document.getElementById('chat-extra-menu').classList.remove('active');
-            triggerGroupAIReply();
+            retryGroupAiReply();
             return;
         }
 
         // 1. 关闭功能菜单
         document.getElementById('chat-extra-menu').classList.remove('active');
+
+        // 先中止正在进行的AI回复
+        if (aiReplyAbortController) {
+            aiReplyAbortController.abort();
+            aiReplyAbortController = null;
+        }
 
         const key = getMessagesKey(currentChatContactId);
         let messages = JSON.parse(localStorage.getItem(key) || '[]');
@@ -32758,6 +32787,8 @@ ${recollectionContext ? `\n回忆总结(曾发生过的事)：\n${recollectionCo
 // ========================= 商城及转账通用支付核心逻辑 =========================
 
 let currentPaymentContext = null; // 用于区分是转账还是商城购买
+let aiReplyAbortController = null; // 用于中止正在进行的AI回复请求（私聊）
+let groupAiReplyAbortController = null; // 用于中止正在进行的群聊AI回复请求
 
 // 新增：专门给商城用的付款弹窗
 window.openMallPaymentPopup = (amount, purchaseData) => {
@@ -36175,6 +36206,13 @@ ${emotionFreq !== 'none' ? (isForceEmotionTurn
         }
 
         try {
+            // 中止之前正在进行的AI回复请求
+            if (aiReplyAbortController) {
+                aiReplyAbortController.abort();
+            }
+            aiReplyAbortController = new AbortController();
+            const abortSignal = aiReplyAbortController.signal;
+
             let fetchUrl = settings.api.url.endsWith('/v1') ? settings.api.url + '/chat/completions' : settings.api.url + '/v1/chat/completions';
             const isGemini = settings.api.url.includes('generativelanguage');
             let bodyData, headers = { 'Content-Type': 'application/json' };
@@ -36187,7 +36225,7 @@ ${emotionFreq !== 'none' ? (isForceEmotionTurn
                 bodyData = JSON.stringify(payload);
             }
 
-            const res = await fetch(fetchUrl, { method: 'POST', headers: headers, body: bodyData });
+            const res = await fetch(fetchUrl, { method: 'POST', headers: headers, body: bodyData, signal: abortSignal });
             if (!res.ok) {
                 const errText = await res.text();
                 throw new Error(`API Error: ${res.status} - ${errText}`);
@@ -36843,6 +36881,10 @@ ${emotionFreq !== 'none' ? (isForceEmotionTurn
             }
 
         } catch (e) {
+            if (e.name === 'AbortError') {
+                // 请求被中止（用户点击了重说），静默处理
+                return;
+            }
             showToast("AI 回复失败: " + e.message, 4000);
             console.error("AI Reply Error:", e);
         } finally {
@@ -36851,6 +36893,7 @@ ${emotionFreq !== 'none' ? (isForceEmotionTurn
                 signatureEl.textContent = originalSignature;
                 signatureEl.classList.remove('typing-anim');
             }
+            aiReplyAbortController = null;
         }
     };
     async function generateMomentForCharacter(contact) {
