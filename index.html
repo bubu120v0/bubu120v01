@@ -3272,9 +3272,9 @@
         /* --- 群聊设置页 --- */
         #group-settings-view { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: #F5F5F5; z-index: 110; display: none; flex-direction: column; overflow-y: auto; }
         #group-settings-view.active { display: flex; }
-        .group-settings-header { display: flex; align-items: center; padding: 14px 16px; background: white; position: sticky; top: 0; z-index: 2; }
+        .group-settings-header { display: flex; align-items: center; padding: 50px 16px 14px; background: white; position: sticky; top: 0; z-index: 2; }
         .group-settings-back { cursor: pointer; padding: 4px; }
-        .group-settings-back img { width: 22px; height: 22px; }
+        .group-settings-back img { width: 28px; height: 28px; }
         .group-settings-header-title { flex: 1; text-align: center; font-size: 16px; font-weight: 600; color: #333; margin-right: 30px; }
         .group-settings-info { background: white; padding: 20px; display: flex; flex-direction: column; align-items: center; margin-bottom: 10px; }
         .group-settings-avatar { width: 64px; height: 64px; border-radius: 14px; object-fit: cover; margin-bottom: 10px; cursor: pointer; }
@@ -12963,6 +12963,18 @@ body.phone-frame-active .pet-task-close { margin-top: 8px !important; padding: 7
                     <span class="group-settings-action-label">消息免打扰</span>
                     <span class="group-settings-action-value" id="group-settings-mute-val">已开启</span>
                 </div>
+                <div class="group-settings-action-item" onclick="openMemberAliasList()">
+                    <span class="group-settings-action-label">设置群成员备注</span>
+                    <span class="group-settings-action-value">></span>
+                </div>
+            </div>
+            <!-- 群成员备注面板 -->
+            <div id="group-alias-list-panel" style="display:none;background:white;padding:14px 20px;margin-bottom:10px;">
+                <div style="display:flex;align-items:center;margin-bottom:12px;">
+                    <span onclick="closeMemberAliasList()" style="cursor:pointer;font-size:14px;color:#999;margin-right:10px;">< 返回</span>
+                    <span style="font-size:14px;font-weight:600;color:#333;">群成员备注</span>
+                </div>
+                <div id="group-alias-list-content"></div>
             </div>
             <div class="group-settings-leave-btn" onclick="leaveGroup()">退出群聊</div>
         </div>
@@ -27039,7 +27051,9 @@ ${actionInstruction}
             if (gi === -1) return;
             groups[gi].groupAvatar = base64;
             localStorage.setItem(GROUP_CHATS_DATA_KEY, JSON.stringify(groups));
-            document.getElementById('group-settings-avatar').src = base64;
+            const avatarEl = document.getElementById('group-settings-avatar');
+            avatarEl.removeAttribute('data-loaded');
+            avatarEl.src = base64;
             renderChatList();
             showToast('群头像已更新');
         });
@@ -27145,6 +27159,7 @@ ${actionInstruction}
             groupName: name,
             groupAvatar: groupAvatar,
             memberIds: selectedGroupMemberIds.slice(),
+            memberAliases: {},
             ownerId: 'user',
             createdAt: Date.now(),
             timestamp: Date.now(),
@@ -27223,7 +27238,9 @@ ${actionInstruction}
         if (!currentChatContactId || !currentChatContactId.startsWith('group_')) return;
         const group = getGroupInfo(currentChatContactId);
         if (!group) return;
-        document.getElementById('group-settings-avatar').src = group.groupAvatar;
+        const avatarEl = document.getElementById('group-settings-avatar');
+        avatarEl.removeAttribute('data-loaded');
+        avatarEl.src = group.groupAvatar;
         document.getElementById('group-settings-name').innerText = group.groupName;
         document.getElementById('group-settings-member-count').innerText = (group.memberIds.length + 1) + '人';
         document.getElementById('group-settings-pin-val').innerText = group.isPinned ? '已置顶' : '未置顶';
@@ -27233,6 +27250,7 @@ ${actionInstruction}
     };
     window.closeGroupSettings = () => {
         document.getElementById('group-settings-view').classList.remove('active');
+        document.getElementById('group-alias-list-panel').style.display = 'none';
     };
     function renderGroupSettingsMembers(group) {
         const grid = document.getElementById('group-settings-members-grid');
@@ -27249,9 +27267,11 @@ ${actionInstruction}
         group.memberIds.forEach(mid => {
             const c = contacts.find(x => x.id === mid);
             if (!c) return;
+            const alias = (group.memberAliases && group.memberAliases[mid]) || '';
+            const displayName = alias || c.alias || c.name;
             const cell = document.createElement('div');
             cell.className = 'group-member-cell';
-            cell.innerHTML = `<img src="${c.avatar}" onerror="this.src='https://img.heliar.top/file/1770068438490_添加人群_people-plus.png'"><span class="cell-name">${escapeHtml(c.alias || c.name)}</span>`;
+            cell.innerHTML = `<img src="${c.avatar}" onerror="this.src='https://img.heliar.top/file/1770068438490_添加人群_people-plus.png'"><span class="cell-name">${escapeHtml(displayName)}</span>`;
             cell.onclick = () => { removeGroupMember(mid); };
             cell.title = '点击移除该成员';
             grid.appendChild(cell);
@@ -27270,7 +27290,53 @@ ${actionInstruction}
         grid.appendChild(removeCell);
     }
 
-    // --- 移除群成员 ---
+    window.openMemberAliasList = () => {
+        if (!currentChatContactId || !currentChatContactId.startsWith('group_')) return;
+        const group = getGroupInfo(currentChatContactId);
+        if (!group) return;
+        const content = document.getElementById('group-alias-list-content');
+        content.innerHTML = '';
+        let contacts = [];
+        try { contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]'); } catch(e) {}
+        group.memberIds.forEach(mid => {
+            const c = contacts.find(x => x.id === mid);
+            if (!c) return;
+            const alias = (group.memberAliases && group.memberAliases[mid]) || '';
+            const origName = c.alias || c.name;
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #f5f5f5;';
+            row.innerHTML = `
+                <img src="${c.avatar}" onerror="this.src='https://img.heliar.top/file/1770068438490_添加人群_people-plus.png'" style="width:36px;height:36px;border-radius:50%;object-fit:cover;flex-shrink:0;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:13px;color:#333;font-weight:500;">${escapeHtml(origName)}</div>
+                    <div style="font-size:11px;color:#999;margin-top:2px;">备注：${alias ? escapeHtml(alias) : '未设置'}</div>
+                </div>
+                <button onclick="editMemberAlias(${mid})" style="padding:4px 10px;border:1px solid #ddd;border-radius:8px;background:white;color:#666;font-size:12px;cursor:pointer;flex-shrink:0;">修改</button>
+            `;
+            content.appendChild(row);
+        });
+        document.getElementById('group-alias-list-panel').style.display = 'block';
+    };
+    window.closeMemberAliasList = () => {
+        document.getElementById('group-alias-list-panel').style.display = 'none';
+    };
+    window.editMemberAlias = (memberId) => {
+        if (!currentChatContactId) return;
+        const group = getGroupInfo(currentChatContactId);
+        if (!group) return;
+        let contacts = [];
+        try { contacts = JSON.parse(localStorage.getItem(CHAT_DATA_KEY) || '[]'); } catch(e) {}
+        const c = contacts.find(x => x.id === memberId);
+        if (!c) return;
+        currentAliasEditMemberId = memberId;
+        const currentAlias = (group.memberAliases && group.memberAliases[memberId]) || '';
+        const input = document.getElementById('group-edit-input');
+        document.getElementById('group-edit-modal-title').innerText = `修改 ${c.alias || c.name} 的备注`;
+        input.placeholder = '请输入备注名';
+        input.value = currentAlias;
+        currentGroupEditType = 'alias';
+        document.getElementById('group-edit-modal').classList.add('active');
+    };
     window.removeGroupMember = (contactId) => {
         if (!currentChatContactId || !currentChatContactId.startsWith('group_')) return;
         let groups = getGroupChatList();
@@ -27425,6 +27491,7 @@ ${actionInstruction}
     window.closeGroupEditModal = () => {
         document.getElementById('group-edit-modal').classList.remove('active');
     };
+    let currentAliasEditMemberId = null;
     window.confirmGroupEdit = () => {
         if (!currentChatContactId || !currentChatContactId.startsWith('group_')) return;
         const value = document.getElementById('group-edit-input').value.trim();
@@ -27443,6 +27510,16 @@ ${actionInstruction}
             localStorage.setItem(msgKey, JSON.stringify(msgs));
             document.getElementById('group-settings-name').innerText = value;
             document.getElementById('chat-conv-title').innerText = value;
+        } else if (currentGroupEditType === 'alias') {
+            if (!groups[gi].memberAliases) groups[gi].memberAliases = {};
+            if (value) {
+                groups[gi].memberAliases[currentAliasEditMemberId] = value;
+            } else {
+                delete groups[gi].memberAliases[currentAliasEditMemberId];
+            }
+            renderGroupSettingsMembers(groups[gi]);
+            openMemberAliasList();
+            showToast(value ? '备注已保存' : '备注已清除');
         }
         saveGroupChatList(groups);
         closeGroupEditModal();
@@ -27521,59 +27598,135 @@ ${actionInstruction}
 
         const signatureEl = document.getElementById('chat-conv-signature');
 
-        // 依次让每个成员回复
-        for (let i = 0; i < group.memberIds.length; i++) {
-            const memberId = group.memberIds[i];
-            const member = contacts.find(c => c.id === memberId);
+        // 显示"成员正在回复中"
+        if (signatureEl) {
+            signatureEl.textContent = '成员正在回复中';
+            signatureEl.classList.add('typing-anim');
+        }
+
+        // 随机打乱回复顺序
+        const shuffledIds = [...group.memberIds].sort(() => Math.random() - 0.5);
+
+        // 构建群成员信息表（供每个角色了解其他成员）
+        const memberInfoMap = {};
+        const allMembers = [];
+        group.memberIds.forEach(mid => {
+            const c = contacts.find(x => x.id === mid);
+            if (c) {
+                memberInfoMap[mid] = c;
+                allMembers.push({ id: mid, name: c.alias || c.name, persona: c.persona || '' });
+            }
+        });
+        const globalProfile = getUserProfile();
+        const uName = globalProfile.nickname || "User";
+
+        // 获取用户人设（取第一个成员的用户人设设置，或全局默认）
+        const firstMember = memberInfoMap[group.memberIds[0]];
+        const uPersona = (firstMember && firstMember.userPersona) || '一个普通用户';
+
+        for (let i = 0; i < shuffledIds.length; i++) {
+            const memberId = shuffledIds[i];
+            const member = memberInfoMap[memberId];
             if (!member) continue;
 
-            // 显示正在输入
-            if (signatureEl) {
-                signatureEl.textContent = `${member.alias || member.name}正在输入...`;
-                signatureEl.classList.add('typing-anim');
-            }
-
             try {
-                // 构建对话上下文
+                // 重新读取最新消息（包含之前成员的回复）
+                try { messages = JSON.parse(localStorage.getItem(msgKey) || '[]'); } catch(e) {}
+
+                // 构建对话上下文（包含所有成员的发言）
                 const recentMsgs = messages.slice(-30);
                 let chatContext = '';
                 recentMsgs.forEach(m => {
                     if (m.isSystemMsg) {
                         chatContext += `[系统] ${m.text}\n`;
+                    } else if (m.type === 'sent') {
+                        chatContext += `${uName}: ${m.text || '[非文本消息]'}\n`;
                     } else {
-                        const senderName = m.senderId === 'user' ? '我' : (m.senderName || '未知');
+                        const senderName = m.senderName || '未知';
                         chatContext += `${senderName}: ${m.text || '[非文本消息]'}\n`;
                     }
                 });
 
-                const globalProfile = getUserProfile();
-                const uName = member.userName || globalProfile.nickname || "User";
-
                 // 构建角色设定
                 let systemPrompt = `你是${member.name}，正在一个群聊中。群名是"${group.groupName}"。\n`;
-                if (member.signature) systemPrompt += `你的个性签名是：${member.signature}\n`;
-                systemPrompt += `以下是群聊的最近对话记录，请根据你的角色特点和对话内容，以${member.name}的身份回复一条消息。只回复消息内容本身，不要加任何前缀或引号。回复要符合你的性格和语境。\n`;
-                systemPrompt += `用户的名字是"${uName}"。\n`;
 
-                // 世界书
-                let worldbookEntries = [];
-                try {
-                    const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
-                    const wbIds = member.worldbookIds || [];
-                    allWb.filter(b => wbIds.includes(b.id) || b.isGlobal).forEach(b => {
-                        if (b.entries) {
-                            try {
-                                const entries = typeof b.entries === 'string' ? JSON.parse(b.entries) : b.entries;
-                                entries.forEach(e => { if (e.content) worldbookEntries.push(e.content); });
-                            } catch(e) {}
-                        }
-                    });
-                } catch(e) {}
-                if (worldbookEntries.length > 0) {
-                    systemPrompt += `世界书知识：\n${worldbookEntries.join('\n')}\n`;
+                // 角色人设
+                if (member.persona) {
+                    systemPrompt += `\n【你的人设】\n${member.persona}\n`;
+                }
+                if (member.signature) {
+                    systemPrompt += `你的个性签名是：${member.signature}\n`;
                 }
 
-                systemPrompt += `\n群聊记录：\n${chatContext}`;
+                // 用户人设
+                systemPrompt += `\n【用户信息】\n用户的名字是"${uName}"。\n用户人设：${uPersona}\n`;
+
+                // 其他群成员信息（含互相认识逻辑）
+                const otherMembers = allMembers.filter(m => m.id !== memberId);
+                if (otherMembers.length > 0) {
+                    systemPrompt += `\n【群聊中的其他成员】\n`;
+                    otherMembers.forEach(om => {
+                        // 检查当前角色的人设中是否提到了该成员的名字
+                        const memberName = om.name;
+                        const personaMentionsOther = member.persona && member.persona.includes(memberName);
+                        // 检查对方人设中是否提到了当前角色
+                        const otherMentionsMe = om.persona && om.persona.includes(member.name);
+
+                        if (personaMentionsOther || otherMentionsMe) {
+                            systemPrompt += `- ${memberName}：你认识这个人。`;
+                            // 如果对方人设中有关于当前角色的描述，也告知
+                            if (otherMentionsMe && om.persona) {
+                                // 提取包含当前角色名的句子
+                                const sentences = om.persona.split(/[。！？\n]/).filter(s => s.includes(member.name));
+                                if (sentences.length > 0) {
+                                    systemPrompt += `你对${memberName}的了解：${sentences.join('；')}`;
+                                }
+                            }
+                        } else {
+                            systemPrompt += `- ${memberName}：你不认识这个人（你的设定中没有提到过TA），如果TA跟你说话，你应该表现出不认识的态度。`;
+                        }
+                        // 如果对方有公开的个性签名
+                        const omContact = memberInfoMap[om.id];
+                        if (omContact && omContact.signature) {
+                            systemPrompt += ` TA的签名是"${omContact.signature}"。`;
+                        }
+                        systemPrompt += `\n`;
+                    });
+                }
+
+                systemPrompt += `\n【重要规则】\n`;
+                systemPrompt += `1. 你是在群聊中，所有人都能看到你说的话，你也能看到所有人说的话。\n`;
+                systemPrompt += `2. 你可以回复用户，也可以回复其他成员，或同时对多人说话。\n`;
+                systemPrompt += `3. 如果你不认识某个人，不要假装认识，要自然地表现出陌生感。\n`;
+                systemPrompt += `4. 只回复消息内容本身，不要加任何前缀、引号或角色名标记。\n`;
+                systemPrompt += `5. 回复要符合你的性格和语境，保持角色一致性。\n`;
+
+                // 世界书
+                if (member.worldbookIds && member.worldbookIds.length > 0) {
+                    try {
+                        const allWb = JSON.parse(localStorage.getItem(WORLDBOOK_DATA_KEY) || '[]');
+                        const lastUserMsg = [...recentMsgs].reverse().find(m => m.type === 'sent');
+                        const userMsgText = lastUserMsg ? lastUserMsg.text : '';
+                        const wbContext = buildWorldbookContext(allWb, member.worldbookIds, userMsgText);
+                        if (wbContext) {
+                            systemPrompt += `\n【世界书/背景设定】\n${wbContext}\n`;
+                        }
+                    } catch(e) {}
+                }
+
+                // 回忆总结
+                try {
+                    const recollectionData = getRecollections(String(memberId));
+                    const recollectionItems = recollectionData.items || [];
+                    if (recollectionItems.length > 0) {
+                        const recollectionContext = recollectionItems.map(item => item.text).join('\n');
+                        if (recollectionContext) {
+                            systemPrompt += `\n【回忆总结（你曾经历过的事）】\n${recollectionContext}\n`;
+                        }
+                    }
+                } catch(e) {}
+
+                systemPrompt += `\n【群聊记录】\n${chatContext}`;
 
                 // 时间感知
                 if (member.timePerceptionEnabled) {
@@ -27598,6 +27751,9 @@ ${actionInstruction}
                 const replyText = data.choices?.[0]?.message?.content?.trim();
                 if (!replyText) continue;
 
+                // 使用备注名（如果有）
+                const alias = (group.memberAliases && group.memberAliases[memberId]) || '';
+
                 // 添加群消息
                 const newMsg = {
                     id: Date.now() + i,
@@ -27606,9 +27762,12 @@ ${actionInstruction}
                     timestamp: Date.now(),
                     isGroupMsg: true,
                     senderId: memberId,
-                    senderName: member.alias || member.name,
+                    senderName: alias || member.alias || member.name,
                     senderAvatar: member.avatar
                 };
+
+                // 重新读取消息并追加
+                try { messages = JSON.parse(localStorage.getItem(msgKey) || '[]'); } catch(e) { messages = []; }
                 messages.push(newMsg);
                 localStorage.setItem(msgKey, JSON.stringify(messages));
 
@@ -27624,6 +27783,9 @@ ${actionInstruction}
                 // 如果仍在当前群聊，刷新
                 if (currentChatContactId === groupId) {
                     renderConversationMessages();
+                } else {
+                    // 不在当前群聊页面，弹出通知（需检查免打扰）
+                    try { showGroupMessageNotification(groupId, alias || member.alias || member.name, replyText, member.avatar); } catch(e) {}
                 }
             } catch(e) {
                 console.error(`Group AI reply error for member ${memberId}:`, e);
@@ -29030,6 +29192,63 @@ ${msgContext ? msgContext : '无'}
 
         startTimer();
     }
+
+    // 群聊消息通知（免打扰时隐藏通知栏）
+    function showGroupMessageNotification(groupId, senderName, messageText, senderAvatar) {
+        const group = getGroupInfo(groupId);
+        if (group && group.isMuted) return; // 免打扰开启，不弹通知
+        const chatView = document.getElementById('chat-conversation-view');
+        if (currentChatContactId === groupId && chatView && chatView.classList.contains('active')) return;
+
+        const container = document.getElementById('msg-notification-container');
+        const existing = container.querySelectorAll('.msg-notification');
+        existing.forEach(el => el.remove());
+
+        const notif = document.createElement('div');
+        notif.className = 'msg-notification';
+        const groupName = group ? group.groupName : '群聊';
+        notif.innerHTML = `
+            <img class="msg-notification-avatar" src="${senderAvatar || ''}" onerror="this.style.visibility='hidden'">
+            <div class="msg-notification-content">
+                <div class="msg-notification-header">
+                    <span class="msg-notification-name"></span>
+                    <span class="msg-notification-time">刚刚</span>
+                </div>
+                <div class="msg-notification-text"></div>
+            </div>
+        `;
+        notif.querySelector('.msg-notification-name').textContent = groupName;
+        notif.querySelector('.msg-notification-text').textContent = `${senderName}: ${messageText}`;
+
+        let timeoutId = null;
+        let remaining = NOTIFICATION_DURATION;
+        let startTime = Date.now();
+
+        const dismiss = () => {
+            if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; }
+            notif.classList.remove('show');
+            notif.classList.add('hide');
+            setTimeout(() => { if (notif.parentNode) notif.remove(); }, 300);
+        };
+        const startTimer = () => {
+            startTime = Date.now();
+            timeoutId = setTimeout(dismiss, remaining);
+        };
+        const pauseTimer = () => {
+            if (timeoutId) { clearTimeout(timeoutId); timeoutId = null; remaining -= (Date.now() - startTime); if (remaining < 0) remaining = 0; }
+        };
+
+        notif.addEventListener('click', () => {
+            openGroupChatWindow(groupId);
+            dismiss();
+        });
+        notif.addEventListener('mouseenter', pauseTimer);
+        notif.addEventListener('mouseleave', startTimer);
+
+        container.appendChild(notif);
+        requestAnimationFrame(() => notif.classList.add('notify-show'));
+        startTimer();
+    }
     // ========================= 消息通知栏系统 END =========================
 
     window.openChatWindow = (contactId) => {
@@ -29580,12 +29799,19 @@ ${msgContext ? msgContext : '无'}
             }
             avatar.className = 'msg-bubble-avatar';
 
-            // 群聊消息显示发送者名称
+            // 群聊消息显示发送者名称（优先使用备注）
             let senderInfoEl = null;
             if (isGroupChat && msg.isGroupMsg && msg.type !== 'sent' && msg.senderName) {
+                let displaySenderName = msg.senderName;
+                if (msg.senderId && currentChatContactId) {
+                    const grp = getGroupInfo(currentChatContactId);
+                    if (grp && grp.memberAliases && grp.memberAliases[msg.senderId]) {
+                        displaySenderName = grp.memberAliases[msg.senderId];
+                    }
+                }
                 senderInfoEl = document.createElement('div');
                 senderInfoEl.className = 'msg-group-sender-info';
-                senderInfoEl.innerHTML = `<span class="msg-group-sender-name">${escapeHtml(msg.senderName)}</span>`;
+                senderInfoEl.innerHTML = `<span class="msg-group-sender-name">${escapeHtml(displaySenderName)}</span>`;
             }
 
             let contentHtml;
